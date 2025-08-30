@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ioctl.h>
 
 // getting ctrl combinations
 #define CTRL_KEY(c) (c & (31))
@@ -20,34 +21,122 @@
 #define  WHITE       "\x1b[37m" 
 #define  COLOR_RESET "\x1b[0m"   
 
+int window_rows, window_cols;
 
-struct termios orig_termios;
+struct termios default_term;
 
-void die(const char *s) {
-    write(STDOUT_FILENO, "\x1b[H", 3);
+void ShowError(const char *message) {
+    // system("clear");
     write(STDOUT_FILENO, "\x1b[2J", 4);
+    write(STDOUT_FILENO, "\x1b[H", 3);
 
-    perror(s);
+
+    printf("%s Error in %s : %s %s \n", RED, message, strerror(errno), COLOR_RESET);
     exit(1);
 }
 
+
+
+// Implement a dyncamic string data type with the capacity trick for effiency
+struct string {
+    char* str;
+    size_t size;
+    size_t capacity;
+};
+
+void StringInit(struct string* str) {
+    str->size = 0;
+    str->capacity = 10;
+    str->str = malloc(str->capacity);
+    
+}
+
+void StringAppend(struct string *old, char* add) {
+    size_t add_len = strlen(add);
+    if (old->capacity < (old->size + add_len)) {
+        
+        old->capacity = (old->size + add_len) * 2;
+        old->str = realloc(old->str ,old->capacity);
+    
+        // Exit the program with error message if memory wasn't allocated
+        if (old->str == NULL) {
+            ShowError("Memory couldn't be allocated");
+        }
+    }
+
+    memcpy(&old->str[old->size], add, add_len);
+
+    old->size += add_len;
+}
+
+void StringInsert(struct string* old, size_t pos, char* add) {
+    if (pos < 0 || pos > old->size) {
+        return;
+    } else if (pos == old->size) {
+        StringAppend(old, add);
+        return;
+    }
+
+    size_t add_len = strlen(add);
+    if (old->capacity < (old->size + add_len)) {
+        
+        old->capacity = (old->size + add_len) * 2;
+        old->str = realloc(old->str ,old->capacity);
+    
+        // Exit the program with error message if memory wasn't allocated
+        if (old->str == NULL) {
+            ShowError("Memory couldn't be allocated");
+        }
+    }
+
+    // move the current string after pos to the right
+    for (size_t i = old->size - 1; i >= pos; i--) {
+        old->str[i+add_len] = old->str[i];
+    }
+
+    memcpy(&old->str[pos], add, add_len);
+    old->size += add_len;
+}
+
+void StringDestroy(struct string* str) {
+    free(str->str);
+    str->str = NULL;
+}
+
+
+void GetWindowSize(int* window_rows, int* window_cols) {
+    struct winsize window;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) == -1 || window.ws_row == 0) {
+        ShowError("Failed to get window size");  
+    } else {
+        *window_rows = window.ws_row;
+        *window_cols = window.ws_col;
+    }
+}
+
 void DrawTildes() {
-    // Color this tildes BLUE
+    // color the tildes blue
     const char* tilde_cursor_pos = "\x1b[2;1H";
     write(STDOUT_FILENO ,tilde_cursor_pos, strlen(tilde_cursor_pos));
     write(STDOUT_FILENO, BLUE, strlen(BLUE));
-    
-    for (int i = 0; i < 24; i++) {
-        write(STDOUT_FILENO, "~\r\n", 3);
-    }
-    // reset the original color
 
+
+    for (int i = 0; i < window_rows - 1; i++) {
+        if (i == window_rows - 2) {
+            write(STDOUT_FILENO, "~", 1);
+        } else {
+            write(STDOUT_FILENO, "~\r\n", 3);
+        }
+    }
+    
+    // reset the original color
     write(STDOUT_FILENO, COLOR_RESET, strlen(COLOR_RESET));
     
 }
 
 void EditorClearScreen() {
     write(STDOUT_FILENO, "\x1b[H", 3);
+    // system("clear");
     write(STDOUT_FILENO, "\x1b[2J", 4);
 
     DrawTildes();
@@ -56,24 +145,21 @@ void EditorClearScreen() {
 
   
 void DisableRawMode () {
-    if (tcsetattr(STDERR_FILENO, TCIFLUSH, &orig_termios) == -1) {
-        die("tcsetattr");
-    }
-    tcsetattr(STDERR_FILENO, TCIFLUSH, &orig_termios);
+    tcsetattr(STDIN_FILENO, TCIFLUSH, &default_term);
 }
 
 
 
 void EnableRawMode () {
+    atexit(DisableRawMode);
 
-    if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) {
-        die("tcgetattr");
+    if (tcgetattr(STDIN_FILENO, &default_term) == -1) {
+        ShowError("tcgetattr");
     }
     
 
-    struct termios raw = orig_termios;
+    struct termios raw = default_term;
 
-    atexit(DisableRawMode);
 
     raw.c_iflag &= ~(IXON | ICRNL);
     raw.c_oflag &= ~(OPOST);
@@ -84,9 +170,7 @@ void EnableRawMode () {
     raw.c_cc[VTIME] = 1;
 
 
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
-        die("tcgetattr");
-    }
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
 
@@ -98,22 +182,41 @@ int EditorReadKey() {
     } while (read_ret == 0);
 
     if (read_ret == -1) {
-        die("read");
+        ShowError("read");
     }
     return c;
 }
 
 void EditorProccessKey() {
     int key = EditorReadKey();
+
+    // Exit the program when entering CTRL + q
     if (key == CTRL_KEY('q')) {
-        write(STDOUT_FILENO, "\x1b[H", 3);
+
+        // clear the screen before exiting
+        // system("clear");
         write(STDOUT_FILENO, "\x1b[2J", 4);
-    
+        write(STDOUT_FILENO, "\x1b[H", 3);
+
         exit(0);
     }
 }
 
-int main() {
+// void ShowText(int argc, char** argv) {
+//     for (int i = 0; i < argc; i++) {
+//         printf("%s \r\n", argv[i]);
+//     }
+//     fflush(stdout);
+//     struct string test;
+//     StringInit(&test);
+//     StringAppend(&test, "test");
+//     StringInsert(&test, 1, "1");
+//     printf("%s \r\n", test.str);
+//     StringDestroy(&test);
+// }
+
+int main(int argc, char** argv) {
+    GetWindowSize(&window_rows, &window_cols);
     EnableRawMode();
     while (1) {
         EditorClearScreen();
