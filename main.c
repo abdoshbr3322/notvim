@@ -26,16 +26,12 @@ int window_rows, window_cols;
 struct termios default_term;
 
 void ShowError(const char *message) {
-    // system("clear");
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
-
 
     printf("%s Error in %s : %s %s \n", RED, message, strerror(errno), COLOR_RESET);
     exit(1);
 }
-
-
 
 // Implement a dyncamic string data type with the capacity trick for effiency
 struct string {
@@ -47,11 +43,14 @@ struct string {
 void StringInit(struct string* str) {
     str->size = 0;
     str->capacity = 10;
-    str->str = malloc(str->capacity);
-    
+    str->str = malloc(str->capacity);    
+    // Exit the program with error message if memory wasn't allocated
+    if (str->str == NULL) {
+        ShowError("Memory couldn't be allocated");
+    }
 }
 
-void StringAppend(struct string *old, char* add) {
+void StringAppend(struct string *old, const char* add) {
     size_t add_len = strlen(add);
     if (old->capacity < (old->size + add_len)) {
         
@@ -69,8 +68,8 @@ void StringAppend(struct string *old, char* add) {
     old->size += add_len;
 }
 
-void StringInsert(struct string* old, size_t pos, char* add) {
-    if (pos < 0 || pos > old->size) {
+void StringInsert(struct string* old, size_t pos, const char* add) {
+    if (pos > old->size) {
         return;
     } else if (pos == old->size) {
         StringAppend(old, add);
@@ -117,38 +116,38 @@ void GetWindowSize(int* window_rows, int* window_cols) {
 void DrawTildes() {
     // color the tildes blue
     const char* tilde_cursor_pos = "\x1b[2;1H";
-    write(STDOUT_FILENO ,tilde_cursor_pos, strlen(tilde_cursor_pos));
-    write(STDOUT_FILENO, BLUE, strlen(BLUE));
-
+    struct string tildes;
+    StringInit(&tildes);
+    StringAppend(&tildes, tilde_cursor_pos);
+    StringAppend(&tildes, BLUE);
 
     for (int i = 0; i < window_rows - 1; i++) {
+        StringAppend(&tildes ,"\x1b[K");
         if (i == window_rows - 2) {
-            write(STDOUT_FILENO, "~", 1);
+            StringAppend(&tildes, "~");
         } else {
-            write(STDOUT_FILENO, "~\r\n", 3);
+            StringAppend(&tildes, "~\r\n");
         }
     }
     
     // reset the original color
-    write(STDOUT_FILENO, COLOR_RESET, strlen(COLOR_RESET));
+    StringAppend(&tildes, COLOR_RESET);
+
+    write(STDOUT_FILENO, tildes.str, tildes.size);
+    StringDestroy(&tildes);
     
 }
 
 void EditorClearScreen() {
     write(STDOUT_FILENO, "\x1b[H", 3);
-    // system("clear");
-    write(STDOUT_FILENO, "\x1b[2J", 4);
 
     DrawTildes();
     write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
-  
 void DisableRawMode () {
     tcsetattr(STDIN_FILENO, TCIFLUSH, &default_term);
 }
-
-
 
 void EnableRawMode () {
     atexit(DisableRawMode);
@@ -157,9 +156,7 @@ void EnableRawMode () {
         ShowError("tcgetattr");
     }
     
-
     struct termios raw = default_term;
-
 
     raw.c_iflag &= ~(IXON | ICRNL);
     raw.c_oflag &= ~(OPOST);
@@ -194,7 +191,6 @@ void EditorProccessKey() {
     if (key == CTRL_KEY('q')) {
 
         // clear the screen before exiting
-        // system("clear");
         write(STDOUT_FILENO, "\x1b[2J", 4);
         write(STDOUT_FILENO, "\x1b[H", 3);
 
@@ -202,24 +198,24 @@ void EditorProccessKey() {
     }
 }
 
-// void ShowText(int argc, char** argv) {
-//     for (int i = 0; i < argc; i++) {
-//         printf("%s \r\n", argv[i]);
-//     }
-//     fflush(stdout);
-//     struct string test;
-//     StringInit(&test);
-//     StringAppend(&test, "test");
-//     StringInsert(&test, 1, "1");
-//     printf("%s \r\n", test.str);
-//     StringDestroy(&test);
-// }
 
-int main(int argc, char** argv) {
+void ShowText() {
+    struct string test;
+    StringInit(&test);
+    StringAppend(&test, "test");
+    StringInsert(&test, 1, "1");
+    printf("%s \r\n %s", test.str, "\x1b[1;2H");
+    fflush(stdout);
+
+    StringDestroy(&test);
+}
+
+int main() {
     GetWindowSize(&window_rows, &window_cols);
     EnableRawMode();
     while (1) {
         EditorClearScreen();
+        ShowText();
         EditorProccessKey();
     }
 }
