@@ -165,7 +165,6 @@ void EditorDestroy() {
 // Make a type to store each line info (content, size, number of lines needed to render it)
 typedef struct {
     String* content;
-    int count;
 } Line;
 
 Line* LineInit(const char* line_buffer) {
@@ -175,15 +174,11 @@ Line* LineInit(const char* line_buffer) {
     line->content = StringInit();
     StringAppend(line->content ,line_buffer);
 
-    // calculate number of lines needed to render the line
-    line->count = ceil_d(line->content->size, editor.window_cols);
-
     return line;
 }
 
 void LineInsert(Line* line ,const char* add) {
     StringAppend(line->content, add);
-    line->count = ceil_d(line->content->size, editor.window_cols);
 }
 
 void LineDestroy(Line* line) {
@@ -307,10 +302,12 @@ void ShowTextFromBuffer() {
     int lines_needed = 0;
     String* lines = StringInit();
     StringAppend(lines,  "\x1b[H");
-    for (size_t line = editor.start_line; line < array_buffer.size; line++) {
+    for (size_t line = 0; line < array_buffer.size; line++) {
         Line* cur_line = array_buffer.array[line];
-        lines_needed += cur_line->count;
-        if (lines_needed > editor.window_rows) break;
+        int needed = (cur_line->content->size ? ceil_d(cur_line->content->size, editor.window_cols) : 1);
+
+        lines_needed += needed;
+        if (lines_needed >= editor.window_rows) break;
         StringAppend(lines ,"\x1b[K");
         StringAppend(lines ,cur_line->content->str);
         StringAppend(lines, "\r\n");
