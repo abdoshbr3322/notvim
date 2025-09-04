@@ -1,2 +1,2 @@
-main.exe: main.c
-	$(CC) main.c -o main.exe -Wall -Wextra -pedantic -std=c99
+main: main.c
+	$(CC) main.c -o main -Wall -Wextra -pedantic -std=c99
