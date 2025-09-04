@@ -21,7 +21,7 @@ A lightweight, vim-like text editor written in C.
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/notvim.git
+git clone https://github.com/abdoshbr3322/notvim.git
 cd notvim
 ```
 
