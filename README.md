@@ -1,5 +1,6 @@
 # notvim
 
+
 A lightweight, vim-like text editor written in C.
 
 ## Features
@@ -34,6 +35,27 @@ make
 ./notvim [filename]
 ```
 
-## License
 
-This project is open source and available under the MIT License.
+
+## Todo List
+
+- [x] Enter raw mode and get input
+
+- [x] Draw Tildes and Show Welcome Message
+
+- [x] Implement data structures for buffer
+
+- [x] Implement text viewer
+  - File reading
+  - Content display
+
+- [ ] Writing to files
+  - Save buffer contents
+  - File permissions handling
+  - Save commands
+  
+- [ ] Implement different modes
+  - Normal mode
+  - Insert mode
+  - Visual mode
+  - Command mode
