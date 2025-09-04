@@ -219,9 +219,7 @@ void DisableRawMode () {
     tcsetattr(STDIN_FILENO, TCIFLUSH, &editor.default_term);
 }
 
-void EnableRawMode () {
-    atexit(DisableRawMode);
-    
+void EnableRawMode () {    
     struct termios raw = editor.default_term;
 
     raw.c_iflag &= ~(IXON | ICRNL);
@@ -384,11 +382,18 @@ void EditorProccessKey() {
 
 }
 
+void cleanup() {
+    BufferDestroy();
+    EditorDestroy();
+    DisableRawMode();
+}
+
 int main(int argc, char** argv) {
     GetWindowSize(&editor.window_rows, &editor.window_cols);
     EditorInit();
     EnableRawMode();
     BufferInit();
+    atexit(cleanup);
     if (argc > 1) {
         ReadFileToBuffer(argv[1]);
     }
@@ -397,6 +402,5 @@ int main(int argc, char** argv) {
         EditorClearScreen();
         EditorProccessKey();
     }
-    BufferDestroy();
-    EditorDestroy();
+    
 }
