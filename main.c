@@ -162,7 +162,7 @@ void EditorDestroy() {
     StringDestroy(editor.buffer);
 }
 
-// Make a type to store each line info (content, size, number of lines needed to render it)
+// Make a type to store each line info (content, size)
 typedef struct {
     String* content;
 } Line;
@@ -282,7 +282,7 @@ void DrawTildes() {
 }
 
 void ShowWelcomeMessage() {
-    const char* message = "~ Welcome To (Editor Name) ~";
+    const char* message = "~ Welcome To notvim ~";
     int y_pos = (editor.window_rows / 2);
     int x_pos = (editor.window_cols / 2) - strlen(message) / 2;
 
@@ -304,10 +304,14 @@ void ShowTextFromBuffer() {
     StringAppend(lines,  "\x1b[H");
     for (size_t line = 0; line < array_buffer.size; line++) {
         Line* cur_line = array_buffer.array[line];
+
+        // calculate number of lines in the terminal needed to render the current line
         int needed = (cur_line->content->size ? ceil_d(cur_line->content->size, editor.window_cols) : 1);
 
+        // stop rendering when the terminal is full
         lines_needed += needed;
         if (lines_needed >= editor.window_rows) break;
+
         StringAppend(lines ,"\x1b[K");
         StringAppend(lines ,cur_line->content->str);
         StringAppend(lines, "\r\n");
@@ -330,9 +334,7 @@ void ReadFileToBuffer(const char *filename) {
     fptr = fopen(filename, "r");
 
     while (getline(&buffer, &len, fptr) != -1) {
-        // buffer[strlen(buffer) - 2] = '\r';
         buffer[strlen(buffer) - 1] = '\0';
-        // if (len > 1) 
         BufferAppend(buffer);
     }
 
