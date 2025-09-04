@@ -162,36 +162,12 @@ void EditorDestroy() {
     StringDestroy(editor.buffer);
 }
 
-// Make a type to store each line info (content, size)
-typedef struct {
-    String* content;
-} Line;
-
-Line* LineInit(const char* line_buffer) {
-    Line *line = malloc(sizeof(Line));
-    
-    // init content
-    line->content = StringInit();
-    StringAppend(line->content ,line_buffer);
-
-    return line;
-}
-
-void LineInsert(Line* line ,const char* add) {
-    StringAppend(line->content, add);
-}
-
-void LineDestroy(Line* line) {
-    StringDestroy(line->content);
-    free(line);
-}
-
 // make a dyncamic array to store lines
 typedef struct 
 {
     size_t size;
     size_t capacity;
-    Line** array;
+    String** array;
 } ArrayBuffer;
 
 ArrayBuffer array_buffer;
@@ -199,29 +175,32 @@ ArrayBuffer array_buffer;
 void BufferInit() {
     array_buffer.size = 0;
     array_buffer.capacity = 10;
-    array_buffer.array = (Line**)malloc(array_buffer.capacity * sizeof(Line*));
+    array_buffer.array = (String**)malloc(array_buffer.capacity * sizeof(String*));
 }
 
 void BufferExpandCapacity() {
     array_buffer.capacity *= 2;
-    array_buffer.array = (Line**)realloc(array_buffer.array, array_buffer.capacity * sizeof(Line*));
+    array_buffer.array = (String**)realloc(array_buffer.array, array_buffer.capacity * sizeof(String*));
 }
 
-void BufferAppend(const char* add) {
+void BufferAppendLine(const char* add) {
     if (array_buffer.size == array_buffer.capacity) 
         BufferExpandCapacity();
     
-    Line* add_line = LineInit(add);
+    String* add_line = StringInit();
+    StringAppend(add_line, add);
     array_buffer.array[array_buffer.size++] = add_line; 
 }
 
-// void ArrayInsert(int idx) {
+// TODO : a function to add white spaces
+
+// void BufferInserySpace(int idx) {
 
 // }
 
 void BufferDestroy() {
     for (size_t i = 0; i < array_buffer.size; i++) {
-        LineDestroy(array_buffer.array[i]);
+        StringDestroy(array_buffer.array[i]);
     }
     free(array_buffer.array);
 }
@@ -240,9 +219,7 @@ void DisableRawMode () {
     tcsetattr(STDIN_FILENO, TCIFLUSH, &editor.default_term);
 }
 
-void EnableRawMode () {
-    atexit(DisableRawMode);
-    
+void EnableRawMode () {    
     struct termios raw = editor.default_term;
 
     raw.c_iflag &= ~(IXON | ICRNL);
@@ -303,17 +280,17 @@ void ShowTextFromBuffer() {
     String* lines = StringInit();
     StringAppend(lines,  "\x1b[H");
     for (size_t line = 0; line < array_buffer.size; line++) {
-        Line* cur_line = array_buffer.array[line];
+        String* cur_line = array_buffer.array[line];
 
         // calculate number of lines in the terminal needed to render the current line
-        int needed = (cur_line->content->size ? ceil_d(cur_line->content->size, editor.window_cols) : 1);
+        int needed = (cur_line->size ? ceil_d(cur_line->size, editor.window_cols) : 1);
 
         // stop rendering when the terminal is full
         lines_needed += needed;
         if (lines_needed >= editor.window_rows) break;
 
         StringAppend(lines ,"\x1b[K");
-        StringAppend(lines ,cur_line->content->str);
+        StringAppend(lines ,cur_line->str);
         StringAppend(lines, "\r\n");
     }
     write(STDOUT_FILENO ,lines->str, lines->size);
@@ -335,7 +312,7 @@ void ReadFileToBuffer(const char *filename) {
 
     while (getline(&buffer, &len, fptr) != -1) {
         buffer[strlen(buffer) - 1] = '\0';
-        BufferAppend(buffer);
+        BufferAppendLine(buffer);
     }
 
     fclose(fptr);
@@ -405,11 +382,18 @@ void EditorProccessKey() {
 
 }
 
+void cleanup() {
+    BufferDestroy();
+    EditorDestroy();
+    DisableRawMode();
+}
+
 int main(int argc, char** argv) {
     GetWindowSize(&editor.window_rows, &editor.window_cols);
     EditorInit();
     EnableRawMode();
     BufferInit();
+    atexit(cleanup);
     if (argc > 1) {
         ReadFileToBuffer(argv[1]);
     }
@@ -418,6 +402,5 @@ int main(int argc, char** argv) {
         EditorClearScreen();
         EditorProccessKey();
     }
-    BufferDestroy();
-    EditorDestroy();
+    
 }
