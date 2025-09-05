@@ -46,16 +46,16 @@ make
 - [x] Implement data structures for buffer
 
 - [x] Implement text viewer
-  - File reading
-  - Content display
+  - [x] File reading
+  - [x] Content display
 
 - [ ] Writing to files
-  - Save buffer contents
-  - File permissions handling
-  - Save commands
+  - [ ] Save buffer contents
+  - [ ] File permissions handling
+  - [ ] Save commands
   
 - [ ] Implement different modes
-  - Normal mode
-  - Insert mode
-  - Visual mode
-  - Command mode
+  - [ ] Normal mode
+  - [ ] Insert mode
+  - [ ] Visual mode
+  - [ ] Command mode
