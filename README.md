@@ -48,11 +48,13 @@ make
 - [x] Implement text viewer
   - [x] File reading
   - [x] Content display
+  - [x] Scrolling 
+  - [ ] Improve Scrolling 
+  - [ ] Syntax Highlihgting
 
 - [ ] Writing to files
-  - [ ] Save buffer contents
-  - [ ] File permissions handling
   - [ ] Save commands
+  - [ ] Save buffer contents
   
 - [ ] Implement different modes
   - [ ] Normal mode
