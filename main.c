@@ -30,12 +30,27 @@ int ceil_d(int a, int b) {
     return (a / b) + (a % b != 0);
 } 
 
+int min(int a, int b) {
+    if (a < b) return a;
+    return b;
+}
+
+int max(int a, int b) {
+    if (a > b) return a;
+    return b;
+}
+
 // define keys enum
 enum KEYS {
     CURSOR_LEFT = 'h',
     CURSOR_RIGHT = 'l',
     CURSOR_UP = 'k',
-    CURSOR_DOWN = 'j'
+    CURSOR_DOWN = 'j',
+    PAGE_UP = 1000,
+    PAGE_DOWN,
+    HOME,
+    END
+
 };
 
 // Shows error message and exits
@@ -133,33 +148,44 @@ void StringDestroy(String* str) {
     free(str);
 }
 
+void GetWindowSize(size_t* window_rows, size_t* window_cols) {
+    struct winsize window;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) == -1 || window.ws_row == 0) {
+        ShowError("Failed to get window size");  
+    } else {
+        *window_rows = window.ws_row;
+        *window_cols = window.ws_col;
+    }
+}
+
 // Editor Configuration
 typedef struct
 {
-    int window_rows, window_cols;
-    int cursor_x, cursor_y;
     struct termios default_term;
+    size_t window_rows, window_cols;
+    int cursor_x, cursor_y;
     int file_opened;
-    String* file_name, *buffer;
-    int start_line;
+    String* file_name;
+    int start_line, end_line;
+    int cur_row, cur_column;
 } Editor;
 
 Editor editor;
 
 void EditorInit() {
-    editor.cursor_x = editor.cursor_y = 1;
     if (tcgetattr(STDIN_FILENO, &editor.default_term) == -1) {
         ShowError("tcgetattr");
     }
-    editor.start_line = 0;
+    GetWindowSize(&editor.window_rows, &editor.window_cols);
+    editor.cursor_x = editor.cursor_y = 1;
     editor.file_opened = 0;
     editor.file_name = StringInit();
-    editor.buffer = StringInit();
+    editor.start_line = editor.end_line = 0;
+    editor.cur_row = editor.cur_column = 0;
 }
 
 void EditorDestroy() {
     StringDestroy(editor.file_name);
-    StringDestroy(editor.buffer);
 }
 
 // make a dyncamic array to store lines
@@ -205,27 +231,25 @@ void BufferDestroy() {
     free(array_buffer.array);
 }
 
-void GetWindowSize(int* window_rows, int* window_cols) {
-    struct winsize window;
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) == -1 || window.ws_row == 0) {
-        ShowError("Failed to get window size");  
-    } else {
-        *window_rows = window.ws_row;
-        *window_cols = window.ws_col;
-    }
-}
-
 void DisableRawMode () {
     tcsetattr(STDIN_FILENO, TCIFLUSH, &editor.default_term);
+
+    // reset the original screen buffer
+    write(STDOUT_FILENO ,"\x1b[?1049l", 8);
+    fflush(stdout);
 }
 
-void EnableRawMode () {    
+void EnableRawMode () {
+    atexit(DisableRawMode);
+    
     struct termios raw = editor.default_term;
 
     raw.c_iflag &= ~(IXON | ICRNL);
     raw.c_oflag &= ~(OPOST);
     raw.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);
 
+    // Switch to another screen buffer
+    write(STDOUT_FILENO ,"\x1b[?1049h", 8);
 
     raw.c_cc[VMIN] = 0;
     raw.c_cc[VTIME] = 1;
@@ -241,7 +265,7 @@ void DrawTildes() {
     StringAppend(tildes, tilde_cursor_pos);
     StringAppend(tildes, BLUE);
 
-    for (int i = 0; i < editor.window_rows - 1; i++) {
+    for (size_t i = 0; i < editor.window_rows - 1; i++) {
         StringAppend(tildes ,"\x1b[K");
         if (i == editor.window_rows - 2) {
             StringAppend(tildes, "~");
@@ -254,12 +278,29 @@ void DrawTildes() {
     StringAppend(tildes, COLOR_RESET);
 
     write(STDOUT_FILENO, tildes->str, tildes->size);
-    StringDestroy(tildes);
+    StringDestroy(tildes);        
+}    
+
+void StatusBar() {
+    String *status_buffer = StringInit();
+
+    char status[40];
+    snprintf(status, sizeof(status), "%d,%d", editor.cur_row + 1, editor.cur_column + 1);
     
+    char bar_pos[20];
+    snprintf(bar_pos, sizeof(bar_pos), "\x1b[%zu;%zuH", editor.window_rows, editor.window_cols - 3 - strlen(status));
+
+    StringAppend(status_buffer ,"\x1b[K");
+    StringAppend(status_buffer, bar_pos);
+    StringAppend(status_buffer, status);
+
+    write(STDOUT_FILENO, status_buffer->str, status_buffer->size);
+
+    StringDestroy(status_buffer);
 }
 
 void ShowWelcomeMessage() {
-    const char* message = "~ Welcome To notvim ~";
+    const char* message = "~ Welcome To notvim. Made with <3 By Abdullah ~";
     int y_pos = (editor.window_rows / 2);
     int x_pos = (editor.window_cols / 2) - strlen(message) / 2;
 
@@ -279,7 +320,7 @@ void ShowTextFromBuffer() {
     int lines_needed = 0;
     String* lines = StringInit();
     StringAppend(lines,  "\x1b[H");
-    for (size_t line = 0; line < array_buffer.size; line++) {
+    for (size_t line = editor.start_line; line < array_buffer.size; line++) {
         String* cur_line = array_buffer.array[line];
 
         // calculate number of lines in the terminal needed to render the current line
@@ -287,8 +328,9 @@ void ShowTextFromBuffer() {
 
         // stop rendering when the terminal is full
         lines_needed += needed;
-        if (lines_needed >= editor.window_rows) break;
+        if (lines_needed >= (int)editor.window_rows) break;
 
+        editor.end_line = line;
         StringAppend(lines ,"\x1b[K");
         StringAppend(lines ,cur_line->str);
         StringAppend(lines, "\r\n");
@@ -304,24 +346,31 @@ void ReadFileToBuffer(const char *filename) {
     StringAppend(editor.file_name, filename);
     
     FILE *fptr;
-    char* buffer = NULL;
+    char* buffer = NULL; 
     size_t len;
 
     // Open the file in read mode
     fptr = fopen(filename, "r");
 
+    if (fptr == NULL) { // The file doesn't exist
+        BufferAppendLine("");
+        return;
+    }
+
     while (getline(&buffer, &len, fptr) != -1) {
         buffer[strlen(buffer) - 1] = '\0';
         BufferAppendLine(buffer);
     }
-
+    if (array_buffer.size == 0) {
+        BufferAppendLine("");
+    }
     fclose(fptr);
 
 }
 
-
 void EditorClearScreen() {
     DrawTildes();
+    StatusBar();
     if (editor.file_opened == 0) {
         ShowWelcomeMessage();
     } else {
@@ -330,6 +379,67 @@ void EditorClearScreen() {
     char cursor_pos[20];
     snprintf(cursor_pos, sizeof(cursor_pos), "\x1b[%d;%dH", editor.cursor_y, editor.cursor_x);
     write(STDOUT_FILENO, cursor_pos, strlen(cursor_pos));
+}
+
+
+void MoveCursorAndScroll(enum KEYS move) {
+    if (array_buffer.size == 0) return;
+    switch (move)
+    {
+    case CURSOR_UP:
+        if (editor.cur_row > 0) {
+            if (editor.start_line > 0 && editor.cursor_y <= 5) { // scroll up
+                editor.cur_row--;
+                editor.start_line--;
+                editor.end_line--;
+            } else {
+                editor.cur_row--;
+                editor.cursor_y--;
+            }
+            editor.cur_column = min(array_buffer.array[editor.cur_row]->size, editor.cur_column);
+        }
+        break;
+    case CURSOR_DOWN:
+        if (editor.cur_row < ((int)array_buffer.size - 1)) {
+            if (editor.end_line < ((int)array_buffer.size - 1) &&  editor.cursor_y >= ((int)editor.window_rows - 6)) { // scroll down
+                editor.cur_row++;
+                editor.start_line++;
+                editor.end_line++;
+            } else {
+                editor.cur_row++;
+                editor.cursor_y++;
+            }
+            editor.cur_column = min(array_buffer.array[editor.cur_row]->size, editor.cur_column);
+        }
+        break;
+    case CURSOR_RIGHT:
+        editor.cur_column = min(array_buffer.array[editor.cur_row]->size, editor.cur_column + 1);
+        break;
+    case CURSOR_LEFT:
+        editor.cur_column = max(0, editor.cur_column - 1);
+        break;
+    case PAGE_UP:
+        for (size_t i = 0; i < editor.window_rows; i++) {
+            MoveCursorAndScroll(CURSOR_UP);
+        }
+        break;
+    case PAGE_DOWN:
+        for (size_t i = 0; i < editor.window_rows; i++) {
+            MoveCursorAndScroll(CURSOR_DOWN);
+        }
+        break;
+    case HOME:
+        editor.cur_column = 0;
+        break;
+    case END:
+        editor.cur_column = array_buffer.array[editor.cur_row]->size;
+        break;
+    default:
+        ShowError("Not a valid move");
+        break;
+    }
+    editor.cursor_x = editor.cur_column + 1;
+
 }
 
 int EditorReadKey() {
@@ -343,8 +453,8 @@ int EditorReadKey() {
     }
     if (c == ESC) {
         char seq[3];
-        if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
-        if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
+        if (read(STDIN_FILENO, &seq[0], 1) != 1) return ESC;
+        if (read(STDIN_FILENO, &seq[1], 1) != 1) return ESC;
 
         if (seq[0] == '[') {
             switch (seq[1]) {
@@ -352,6 +462,15 @@ int EditorReadKey() {
                 case 'B': return CURSOR_DOWN;
                 case 'C': return CURSOR_RIGHT;
                 case 'D': return CURSOR_LEFT;
+                case 'H': return HOME;
+                case 'F': return END;
+            }
+            if (seq[1] == '5' || seq[1] == '6') {
+                if (read(STDIN_FILENO, &seq[2], 1) != 1) return ESC;
+
+                if (seq[2] == '~' && seq[1] == '5') return PAGE_UP;
+                else if (seq[2] == '~' && seq[1] == '6') return PAGE_DOWN;
+                else return ESC;
             }
         }
         return ESC;
@@ -367,19 +486,25 @@ void EditorProccessKey() {
 
     // Exit the program when entering CTRL + q
     if (key == CTRL_KEY('q')) {
-
-        // clear the screen before exiting
-        write(STDOUT_FILENO, "\x1b[2J", 4);
-        write(STDOUT_FILENO, "\x1b[H", 3);
-
         exit(0);
     }
 
-    if (key == CURSOR_UP) editor.cursor_y--;
-    else if (key == CURSOR_DOWN) editor.cursor_y++;
-    else if (key == CURSOR_LEFT) editor.cursor_x--;
-    else if (key == CURSOR_RIGHT) editor.cursor_x++;
-
+    switch (key)
+    {
+    case CURSOR_UP:
+    case CURSOR_DOWN:
+    case CURSOR_RIGHT:
+    case CURSOR_LEFT:
+    case PAGE_UP:
+    case PAGE_DOWN:
+    case HOME:
+    case END:
+        MoveCursorAndScroll(key);
+        break;
+    
+    default:
+        break;
+    }
 }
 
 void cleanup() {
@@ -389,7 +514,6 @@ void cleanup() {
 }
 
 int main(int argc, char** argv) {
-    GetWindowSize(&editor.window_rows, &editor.window_cols);
     EditorInit();
     EnableRawMode();
     BufferInit();
