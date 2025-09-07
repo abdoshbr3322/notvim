@@ -261,10 +261,11 @@ void EnableRawMode () {
 }
 
 void DrawTildes() {
-    // color the tildes blue
     const char* tilde_cursor_pos = "\x1b[H";
     String* tildes = StringInit();
     StringAppend(tildes, tilde_cursor_pos);
+
+    // color the tildes blue
     StringAppend(tildes, BLUE);
 
     for (size_t i = 0; i < editor.window_rows - 1; i++) {
@@ -292,8 +293,8 @@ void StatusBar() {
     char bar_pos[20];
     snprintf(bar_pos, sizeof(bar_pos), "\x1b[%zu;%zuH", editor.window_rows, editor.window_cols - 3 - strlen(status));
 
-    StringAppend(status_buffer ,"\x1b[K");
     StringAppend(status_buffer, bar_pos);
+    StringAppend(status_buffer ,"\x1b[2K");
     StringAppend(status_buffer, status);
 
     write(STDOUT_FILENO, status_buffer->str, status_buffer->size);
@@ -433,10 +434,10 @@ void MoveCursorAndScroll(enum KEYS move) {
         }
         break;
     case HOME:
-        editor.cur_column = 0;
+        editor.max_column = 0;
         break;
     case END:
-        editor.cur_column = array_buffer.array[editor.cur_row]->size;
+        editor.max_column = array_buffer.array[editor.cur_row]->size;
         break;
     default:
         ShowError("Not a valid move");
