@@ -168,6 +168,7 @@ typedef struct
     String* file_name;
     int start_line, end_line;
     int cur_row, cur_column;
+    int max_column;
 } Editor;
 
 Editor editor;
@@ -182,6 +183,7 @@ void EditorInit() {
     editor.file_name = StringInit();
     editor.start_line = editor.end_line = 0;
     editor.cur_row = editor.cur_column = 0;
+    editor.max_column = 0;
 }
 
 void EditorDestroy() {
@@ -413,10 +415,12 @@ void MoveCursorAndScroll(enum KEYS move) {
         }
         break;
     case CURSOR_RIGHT:
-        editor.cur_column = min(array_buffer.array[editor.cur_row]->size, editor.cur_column + 1);
+        if (editor.cur_column < (int)array_buffer.array[editor.cur_row]->size)
+            editor.max_column++;
         break;
     case CURSOR_LEFT:
-        editor.cur_column = max(0, editor.cur_column - 1);
+        if (editor.cur_column > 0)
+            editor.max_column--;
         break;
     case PAGE_UP:
         for (size_t i = 0; i < editor.window_rows; i++) {
@@ -438,6 +442,7 @@ void MoveCursorAndScroll(enum KEYS move) {
         ShowError("Not a valid move");
         break;
     }
+    editor.cur_column = min(editor.max_column, array_buffer.array[editor.cur_row]->size);
     editor.cursor_x = editor.cur_column + 1;
 
 }

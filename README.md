@@ -49,7 +49,7 @@ make
   - [x] File reading
   - [x] Content display
   - [x] Scrolling 
-  - [ ] Improve Scrolling 
+  - [X] Improve Scrolling 
   - [ ] Syntax Highlihgting
 
 - [ ] Writing to files
