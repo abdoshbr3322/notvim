@@ -45,7 +45,7 @@ make
 
 - [x] Implement data structures for buffer
 
-- [x] Implement text viewer
+- [ ] Implement text viewer
   - [x] File reading
   - [x] Content display
   - [x] Scrolling 
