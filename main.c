@@ -21,6 +21,9 @@
 #define  WHITE       "\x1b[37m" 
 #define  COLOR_RESET "\x1b[0m" 
 
+#define BOLD_ON  "\e[1m"
+
+
 // some useful macros
 #define ESC '\x1b' // Escape Sequence
 
@@ -424,19 +427,50 @@ void DrawTildes() {
 
 void StatusBar() {
     String *status_buffer = StringInit();
+    String* message = StringInit();
+
+    char message_pos[20];
+    snprintf(message_pos, sizeof(message_pos), "\x1b[%zu;%dH", editor.window_rows, 2);
+
+    StringAppend(message, message_pos);
+    StringAppend(message ,"\x1b[2K");
+
+    StringAppend(message, CYAN);
+    StringAppend(message, BOLD_ON);
+    switch (editor.mode)
+    {
+    case NORMAL:
+        if (editor.file_name->size < 40) {
+            StringAppend(message, editor.file_name->str);
+        }
+        break;
+    case INSERT:
+        StringAppend(message, "-- INSERT MODE --");
+        break;
+    case VISUAL:
+        StringAppend(message, "-- VIUSAL MODE --");
+        break;
+    case COMMAND_LINE:
+        StringAppend(message, ":");
+        break;
+    default:
+        break;
+    }
+    StringAppend(message, COLOR_RESET);
+    write(STDOUT_FILENO, message->str, message->size);
 
     char status[40];
     snprintf(status, sizeof(status), "%d,%d", editor.cur_line + 1, editor.cur_column + 1);
     
-    char bar_pos[20];
-    snprintf(bar_pos, sizeof(bar_pos), "\x1b[%zu;%zuH", editor.window_rows, editor.window_cols - 3 - strlen(status));
+    char status_pos[20];
+    snprintf(status_pos, sizeof(status_pos), "\x1b[%zu;%zuH", editor.window_rows, editor.window_cols - 3 - strlen(status));
 
-    StringAppend(status_buffer, bar_pos);
-    StringAppend(status_buffer ,"\x1b[2K");
+    StringAppend(status_buffer, status_pos);
     StringAppend(status_buffer, status);
 
     write(STDOUT_FILENO, status_buffer->str, status_buffer->size);
 
+    StringDestroy(message);
     StringDestroy(status_buffer);
 }
 
@@ -716,7 +750,7 @@ void NormalProccessKey(int key) {
         editor.mode = INSERT;
         break;
     case 'v':
-        editor.mode = INSERT;
+        editor.mode = VISUAL;
         break;
     case ':':
         editor.mode = COMMAND_LINE;
