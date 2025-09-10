@@ -42,17 +42,63 @@ int max(int a, int b) {
 
 // define keys enum
 enum KEYS {
-    CURSOR_LEFT = 'h',
-    CURSOR_RIGHT = 'l',
-    CURSOR_UP = 'k',
-    CURSOR_DOWN = 'j',
-    PAGE_UP = 1000,
+    CURSOR_LEFT = 500,
+    CURSOR_RIGHT ,
+    CURSOR_UP,
+    CURSOR_DOWN,
+    PAGE_UP,
     PAGE_DOWN,
     HOME,
-    END
-
+    END,
+    DELETE
 };
 
+
+// helpers
+int IsPrintableCharacter(char c) {
+    return (c >= 32 && c < 127);
+}
+
+int IsMoveKeyNormal(int key) {
+    switch (key)
+    {
+    case 'k':
+    case 'j':
+    case 'l':
+    case 'h':
+    case CURSOR_UP:
+    case CURSOR_DOWN:
+    case CURSOR_RIGHT:
+    case CURSOR_LEFT:
+    case PAGE_UP:
+    case PAGE_DOWN:
+    case HOME:
+    case END:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+int IsMoveKey(int key) {
+    switch (key)
+    {
+    case CURSOR_UP:
+    case CURSOR_DOWN:
+    case CURSOR_RIGHT:
+    case CURSOR_LEFT:
+    case PAGE_UP:
+    case PAGE_DOWN:
+    case HOME:
+    case END:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+
+// TODO : Fix ShowError function
 // Shows error message and exits
 void ShowError(const char *message) {
     write(STDOUT_FILENO, "\x1b[2J", 4);
@@ -63,7 +109,7 @@ void ShowError(const char *message) {
 }
 
 // Implement a dyncamic string data type with the capacity trick for effiency
-typedef struct 
+typedef struct
 {
     char* str;
     size_t size;
@@ -71,76 +117,119 @@ typedef struct
 } String;
 
 String* StringInit() {
-    String* str = malloc(sizeof(String));
-    if (str == NULL) {
+    String* string = malloc(sizeof(String));
+    if (string == NULL) {
         ShowError("Memory couldn't be allocated");
     }
 
     // init
-    str->size = 0;
-    str->capacity = 10;
-    str->str = malloc(str->capacity);    
-    if (str->str == NULL) {
-        free(str);
-        ShowError("Memory couldn't be allocated");
-    }
-
-    // insert null terminator
-    str->str[str->size] = 0;
+    string->size = 0;
+    string->capacity = 10;
+    string->str = malloc(string->capacity);    
 
     // Exit the program with error message if memory wasn't allocated
-    if (str->str == NULL) {
+    if (string->str == NULL) {
+        // free(string);
         ShowError("Memory couldn't be allocated");
     }
-    return str;
+
+    // insert string terminator
+    string->str[string->size] = 0;
+
+    return string;
 }
 
-void StringAppend(String *old, const char* add) {
+void StringAppend(String *string, const char* add) {
     size_t add_len = strlen(add);
-    if (old->capacity <= (old->size + add_len)) {
+    if (string->capacity <= (string->size + add_len)) {
         
-        old->capacity = (old->size + add_len) * 2;
-        old->str = realloc(old->str ,old->capacity);
+        string->capacity = (string->size + add_len) * 2;
+        string->str = realloc(string->str ,string->capacity);
     
         // Exit the program with error message if memory wasn't allocated
-        if (old->str == NULL) {
+        if (string->str == NULL) {
             ShowError("Memory couldn't be allocated");
         }
     }
 
-    memcpy(&old->str[old->size], add, add_len);
-    old->size += add_len;
-    old->str[old->size] = 0;
+    memcpy(&string->str[string->size], add, add_len);
+    string->size += add_len;
+    string->str[string->size] = 0;
 }
 
-void StringInsert(String* old, size_t pos, const char* add) {
-    if (pos > old->size) {
-        return;
-    } else if (pos == old->size) {
-        StringAppend(old, add);
+// void StringInsert(String* string, size_t pos, const char* add) {
+//     if (pos > string->size) {
+//         return;
+//     } else if (pos == string->size) {
+//         StringAppend(string, add);
+//         return;
+//     }
+
+//     size_t add_len = strlen(add);
+//     if (string->capacity < (string->size + add_len)) {
+        
+//         string->capacity = (string->size + add_len) * 2;
+//         string->str = realloc(string->str ,string->capacity);
+    
+//         // Exit the program with error message if memory wasn't allocated
+//         if (string->str == NULL) {
+//             ShowError("Memory couldn't be allocated");
+//         }
+//     }
+
+//     // move the current string after pos to the right
+//     for (size_t i = string->size - 1; i >= pos; i--) {
+//         string->str[i+add_len] = string->str[i];
+//     }
+
+//     memcpy(&string->str[pos], add, add_len);
+//     string->size += add_len;
+//     string->str[string->size] = 0;
+// }
+
+void StringInsertChar(String* string, int pos, const char add) {
+    if (pos > (int)string->size) {
+        // TODO : Show Error
         return;
     }
 
-    size_t add_len = strlen(add);
-    if (old->capacity < (old->size + add_len)) {
+    if (string->capacity + 1 <= string->size) {
         
-        old->capacity = (old->size + add_len) * 2;
-        old->str = realloc(old->str ,old->capacity);
+        string->capacity = (string->size + 1) * 2;
+        string->str = realloc(string->str ,string->capacity);
     
         // Exit the program with error message if memory wasn't allocated
-        if (old->str == NULL) {
+        if (string->str == NULL) {
+            free(string);
             ShowError("Memory couldn't be allocated");
         }
     }
 
-    // move the current string after pos to the right
-    for (size_t i = old->size - 1; i >= pos; i--) {
-        old->str[i+add_len] = old->str[i];
+    // shift chars right
+    for (int i = string->size - 1; i >= pos; i--) {
+        string->str[i+1] = string->str[i];
     }
 
-    memcpy(&old->str[pos], add, add_len);
-    old->size += add_len;
-    old->str[old->size] = 0;
+    string->str[pos] = add;
+    string->size++;
+
+    // add nullptr
+    string->str[string->size] = 0;
+}
+
+void StringDeleteChar(String* string, int pos) {
+    if (pos >= (int)string->size) {
+        // TODO : Show Error
+        return;
+    }
+
+    // shift chars left
+    for (int i = pos; i < (int)string->size - 1; i++) {
+        string->str[i] = string->str[i + 1];
+    }
+    string->size--;
+    string->str[string->size] = 0;
+
 }
 
 void StringDestroy(String* str) {
@@ -158,16 +247,26 @@ void GetWindowSize(size_t* window_rows, size_t* window_cols) {
     }
 }
 
+// Editor Modes
+enum MODE {
+    NORMAL = 0,
+    INSERT,
+    COMMAND_LINE,
+    VISUAL
+};
+
 // Editor Configuration
 typedef struct
 {
     struct termios default_term;
+    enum MODE mode;
     size_t window_rows, window_cols;
     int cursor_x, cursor_y;
     int file_opened;
+    int buffer_modified;
     String* file_name;
     int start_line, end_line;
-    int cur_row, cur_column;
+    int cur_line, cur_column;
     int max_column;
 } Editor;
 
@@ -177,12 +276,14 @@ void EditorInit() {
     if (tcgetattr(STDIN_FILENO, &editor.default_term) == -1) {
         ShowError("tcgetattr");
     }
+    editor.mode = NORMAL;
     GetWindowSize(&editor.window_rows, &editor.window_cols);
     editor.cursor_x = editor.cursor_y = 1;
     editor.file_opened = 0;
+    editor.buffer_modified = 0;
     editor.file_name = StringInit();
     editor.start_line = editor.end_line = 0;
-    editor.cur_row = editor.cur_column = 0;
+    editor.cur_line = editor.cur_column = 0;
     editor.max_column = 0;
 }
 
@@ -220,11 +321,48 @@ void BufferAppendLine(const char* add) {
     array_buffer.array[array_buffer.size++] = add_line; 
 }
 
-// TODO : a function to add white spaces
+void BufferSplitLine(int idx_row, int idx_col) {
+    if (array_buffer.size == array_buffer.capacity) 
+        BufferExpandCapacity();
+    
+    // Shift right rows
+    for (int i = array_buffer.size - 1; i > idx_row; i--) {
+        array_buffer.array[i+1] = array_buffer.array[i];
+    }
+    array_buffer.size++;
 
-// void BufferInserySpace(int idx) {
+    String* cur_line = array_buffer.array[idx_row];
+    
+    // insert new line
+    String* new_line = StringInit();
+    StringAppend(new_line, &cur_line->str[idx_col]);
+    array_buffer.array[idx_row+1] = new_line;
 
-// }
+    // resize current line
+    cur_line->size = idx_col;
+    cur_line->str[cur_line->size] = 0;
+}
+
+void BufferMergeLines(int idx_row) {
+    if (idx_row == 0) {
+        // TODO : Show Error
+        return;
+    }
+
+    String *cur_line = array_buffer.array[idx_row-1], 
+           *next_line = array_buffer.array[idx_row];
+
+    // Shift left lines
+    for (size_t i = idx_row; i + 1 < array_buffer.size; i++) {
+        array_buffer.array[i] = array_buffer.array[i+1];
+    }
+    array_buffer.size--;
+
+
+    StringAppend(cur_line, next_line->str);
+
+    StringDestroy(next_line);
+}
 
 void BufferDestroy() {
     for (size_t i = 0; i < array_buffer.size; i++) {
@@ -288,7 +426,7 @@ void StatusBar() {
     String *status_buffer = StringInit();
 
     char status[40];
-    snprintf(status, sizeof(status), "%d,%d", editor.cur_row + 1, editor.cur_column + 1);
+    snprintf(status, sizeof(status), "%d,%d", editor.cur_line + 1, editor.cur_column + 1);
     
     char bar_pos[20];
     snprintf(bar_pos, sizeof(bar_pos), "\x1b[%zu;%zuH", editor.window_rows, editor.window_cols - 3 - strlen(status));
@@ -368,84 +506,18 @@ void ReadFileToBuffer(const char *filename) {
         BufferAppendLine("");
     }
     fclose(fptr);
-
 }
 
 void EditorClearScreen() {
     DrawTildes();
     StatusBar();
-    if (editor.file_opened == 0) {
+    if (!editor.file_opened && !editor.buffer_modified) {
         ShowWelcomeMessage();
-    } else {
-        ShowTextFromBuffer();
     }
+    ShowTextFromBuffer();
     char cursor_pos[20];
     snprintf(cursor_pos, sizeof(cursor_pos), "\x1b[%d;%dH", editor.cursor_y, editor.cursor_x);
     write(STDOUT_FILENO, cursor_pos, strlen(cursor_pos));
-}
-
-
-void MoveCursorAndScroll(enum KEYS move) {
-    if (array_buffer.size == 0) return;
-    switch (move)
-    {
-    case CURSOR_UP:
-        if (editor.cur_row > 0) {
-            if (editor.start_line > 0 && editor.cursor_y <= 5) { // scroll up
-                editor.cur_row--;
-                editor.start_line--;
-                editor.end_line--;
-            } else {
-                editor.cur_row--;
-                editor.cursor_y--;
-            }
-            editor.cur_column = min(array_buffer.array[editor.cur_row]->size, editor.cur_column);
-        }
-        break;
-    case CURSOR_DOWN:
-        if (editor.cur_row < ((int)array_buffer.size - 1)) {
-            if (editor.end_line < ((int)array_buffer.size - 1) &&  editor.cursor_y >= ((int)editor.window_rows - 6)) { // scroll down
-                editor.cur_row++;
-                editor.start_line++;
-                editor.end_line++;
-            } else {
-                editor.cur_row++;
-                editor.cursor_y++;
-            }
-            editor.cur_column = min(array_buffer.array[editor.cur_row]->size, editor.cur_column);
-        }
-        break;
-    case CURSOR_RIGHT:
-        if (editor.cur_column < (int)array_buffer.array[editor.cur_row]->size)
-            editor.max_column++;
-        break;
-    case CURSOR_LEFT:
-        if (editor.cur_column > 0)
-            editor.max_column--;
-        break;
-    case PAGE_UP:
-        for (size_t i = 0; i < editor.window_rows; i++) {
-            MoveCursorAndScroll(CURSOR_UP);
-        }
-        break;
-    case PAGE_DOWN:
-        for (size_t i = 0; i < editor.window_rows; i++) {
-            MoveCursorAndScroll(CURSOR_DOWN);
-        }
-        break;
-    case HOME:
-        editor.max_column = 0;
-        break;
-    case END:
-        editor.max_column = array_buffer.array[editor.cur_row]->size;
-        break;
-    default:
-        ShowError("Not a valid move");
-        break;
-    }
-    editor.cur_column = min(editor.max_column, array_buffer.array[editor.cur_row]->size);
-    editor.cursor_x = editor.cur_column + 1;
-
 }
 
 int EditorReadKey() {
@@ -471,11 +543,12 @@ int EditorReadKey() {
                 case 'H': return HOME;
                 case 'F': return END;
             }
-            if (seq[1] == '5' || seq[1] == '6') {
+            if (seq[1] >= '1' && seq[1] <= '9') {
                 if (read(STDIN_FILENO, &seq[2], 1) != 1) return ESC;
 
                 if (seq[2] == '~' && seq[1] == '5') return PAGE_UP;
                 else if (seq[2] == '~' && seq[1] == '6') return PAGE_DOWN;
+                else if (seq[2] == '~' && seq[1] == '3') return DELETE;
                 else return ESC;
             }
         }
@@ -484,6 +557,182 @@ int EditorReadKey() {
     return c;
 }
 
+void CalculateCursorX() {
+    editor.cursor_x = (editor.cur_column % editor.window_cols) + 1;
+}
+
+void CalculateCursorY() {
+    editor.cursor_y = 1;
+    for (int line = editor.start_line; line < editor.cur_line; line++) {
+        String* cur_line = array_buffer.array[line];
+        // number of lines needed to render a line
+        int needed = (cur_line->size ? ceil_d(cur_line->size, editor.window_cols) : 1);
+        
+        editor.cursor_y += needed;
+    }
+    editor.cursor_y += (editor.cur_column / editor.window_cols);
+
+}
+
+void ScrollUp() {
+    if (editor.start_line > 0 && editor.cursor_y <= 5) { // scroll up
+        editor.cur_line--;
+        editor.start_line--;
+        editor.end_line--;
+    } else {
+        editor.cur_line--;
+    }
+}
+
+void ScrollDown() {
+    if (editor.end_line < ((int)array_buffer.size - 1) &&  editor.cursor_y >= ((int)editor.window_rows - 6)) { // scroll down
+        editor.cur_line++;
+        editor.start_line++;
+        editor.end_line++;
+    } else {
+        editor.cur_line++;
+    }
+}
+
+void MoveCursorAndScroll(int move) {
+    if (array_buffer.size == 0) return;
+    String* cur_line = array_buffer.array[editor.cur_line];
+
+    switch (move)
+    {
+    case CURSOR_UP:
+    case 'k':
+        if (editor.cur_line > 0) {
+            ScrollUp();
+            cur_line = array_buffer.array[editor.cur_line];
+        }
+        break;
+    case CURSOR_DOWN:
+    case 'j':
+        if (editor.cur_line < ((int)array_buffer.size - 1)) {
+            ScrollDown();
+            cur_line = array_buffer.array[editor.cur_line];
+        }
+        break;
+    case CURSOR_RIGHT:
+    case 'l':
+        if (editor.cur_column < (int)cur_line->size)
+            editor.max_column++;
+        break;
+    case CURSOR_LEFT:
+    case 'h':
+        if (editor.cur_column > 0)
+            editor.max_column--;
+        break;
+    case PAGE_UP:
+        for (size_t i = 0; i < editor.window_rows; i++) {
+            MoveCursorAndScroll(CURSOR_UP);
+        }
+        break;
+    case PAGE_DOWN:
+        for (size_t i = 0; i < editor.window_rows; i++) {
+            MoveCursorAndScroll(CURSOR_DOWN);
+        }
+        break;
+    case HOME:
+        editor.max_column = 0;
+        break;
+    case END:
+        editor.max_column = cur_line->size;
+        break;
+    default:
+        ShowError("Not a valid move");
+        break;
+    }
+    editor.cur_column = min(editor.max_column, cur_line->size);
+
+    CalculateCursorX();
+    CalculateCursorY();
+
+}
+
+// Key proccessing for differnet modes
+void InsertProccessKey(int key) {
+    // New line
+    if (key == '\r') {
+        BufferSplitLine(editor.cur_line, editor.cur_column);
+        MoveCursorAndScroll(CURSOR_DOWN);
+        MoveCursorAndScroll(HOME);
+    }
+
+    // Backspace -> Delete backward
+    if (key == 127) {
+        String* cur_line = array_buffer.array[editor.cur_line];
+        if (editor.cur_column > 0) { // Delete a char
+            StringDeleteChar(cur_line, editor.cur_column - 1);
+            MoveCursorAndScroll(CURSOR_LEFT);
+        } 
+        
+        else if (editor.cur_line > 0) { // Delete a line
+            // get prev line size to move the cursor after it
+            String* prev_line = array_buffer.array[editor.cur_line - 1];
+            size_t prev_size = prev_line->size;
+
+            BufferMergeLines(editor.cur_line);
+            editor.cur_column = editor.max_column = prev_size;
+            ScrollUp();
+            CalculateCursorX();
+            CalculateCursorY();
+        }
+        return;
+    } 
+
+    // Delete key : Delete forward
+    if (key == DELETE) {
+        String* cur_line = array_buffer.array[editor.cur_line];
+        if (editor.cur_column < (int)cur_line->size) {
+            StringDeleteChar(cur_line, editor.cur_column);
+        } else if (editor.cur_line < (int)array_buffer.size - 1) {
+            BufferMergeLines(editor.cur_line + 1);
+        }
+    }
+    // Move key
+    if (IsMoveKey(key)) {
+        MoveCursorAndScroll(key);
+    }
+    
+    // Printable
+    if (IsPrintableCharacter(key)) {
+        editor.buffer_modified = 1;
+        String* cur_line = array_buffer.array[editor.cur_line];
+        StringInsertChar(cur_line, editor.cur_column, key);
+        MoveCursorAndScroll(CURSOR_RIGHT);
+    }
+}
+
+void NormalProccessKey(int key) {
+    if (IsMoveKeyNormal(key)) {
+        MoveCursorAndScroll(key);
+    }
+
+    switch (key)
+    {
+    case 'i':
+        editor.mode = INSERT;
+        break;
+    case 'v':
+        editor.mode = INSERT;
+        break;
+    case ':':
+        editor.mode = COMMAND_LINE;
+        break;
+    default:
+        break;
+    }
+}
+
+void CommandProccessKey(int key) {
+
+}
+
+void VisualProccessKey(int key) {
+
+}
 void EditorProccessKey() {
     int key = EditorReadKey();
 
@@ -495,22 +744,29 @@ void EditorProccessKey() {
         exit(0);
     }
 
-    switch (key)
+    // reset to normal mode when pressing Escape
+    if (key == ESC) {
+        editor.mode = NORMAL;
+    }
+
+    switch (editor.mode)
     {
-    case CURSOR_UP:
-    case CURSOR_DOWN:
-    case CURSOR_RIGHT:
-    case CURSOR_LEFT:
-    case PAGE_UP:
-    case PAGE_DOWN:
-    case HOME:
-    case END:
-        MoveCursorAndScroll(key);
+    case NORMAL:
+        NormalProccessKey(key);
         break;
-    
+    case INSERT:
+        InsertProccessKey(key);
+        break;
+    case COMMAND_LINE:
+        CommandProccessKey(key);
+        break;
+    case VISUAL:
+        VisualProccessKey(key);
+        break;
     default:
         break;
     }
+    
 }
 
 void cleanup() {
@@ -526,6 +782,8 @@ int main(int argc, char** argv) {
     atexit(cleanup);
     if (argc > 1) {
         ReadFileToBuffer(argv[1]);
+    } else {
+        BufferAppendLine("");
     }
     while (1) {
         GetWindowSize(&editor.window_rows, &editor.window_cols);
