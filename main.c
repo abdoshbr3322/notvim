@@ -21,7 +21,7 @@
 #define  WHITE       "\x1b[37m" 
 #define  COLOR_RESET "\x1b[0m" 
 
-#define BOLD_ON  "\e[1m"
+#define BOLD_ON  "\x1b[1m"
 
 
 // some useful macros
@@ -196,7 +196,7 @@ void StringInsertChar(String* string, int pos, const char add) {
         return;
     }
 
-    if (string->capacity + 1 <= string->size) {
+    if (string->capacity <= string->size + 1) {
         
         string->capacity = (string->size + 1) * 2;
         string->str = realloc(string->str ,string->capacity);
