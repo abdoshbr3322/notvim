@@ -58,6 +58,6 @@ make
   
 - [ ] Implement different modes
   - [ ] Normal mode
-  - [ ] Insert mode
+  - [X] Insert mode
   - [ ] Visual mode
   - [ ] Command mode
