@@ -265,6 +265,92 @@ void StringDestroy(String* str) {
     free(str);
 }
 
+
+// make a dyncamic array to store lines
+typedef struct 
+{
+    size_t size;
+    size_t capacity;
+    String** array;
+} Array;
+
+Array* array_buffer;
+
+Array* ArrayInit() {
+    Array* array = (Array*)malloc(sizeof(array));
+    array->size = 0;
+    array->capacity = 10;
+    array->array = (String**)malloc(array->capacity * sizeof(String*));
+
+    return array;
+}
+
+void ArrayExpandCapacity(Array* array) {
+    array->capacity *= 2;
+    array->array = (String**)realloc(array->array, array->capacity * sizeof(String*));
+}
+
+void ArrayAppend(Array* array, String* add) {
+    if (array->size == array->capacity) 
+        ArrayExpandCapacity(array);
+    
+    array->array[array->size++] = add; 
+}
+
+void s_ArrayAppend(Array* array, const char* add) {
+    if (array->size == array->capacity) 
+        ArrayExpandCapacity(array);
+    
+    String* add_line = StringInit();
+    StringAppend(add_line, add);
+    array->array[array->size++] = add_line; 
+}
+
+void ArraySplitLine(Array* array, int idx_row, int idx_col) {
+    if (array->size == array->capacity) 
+        ArrayExpandCapacity(array);
+    
+    // Shift right rows
+    for (int i = array->size - 1; i > idx_row; i--) {
+        array->array[i+1] = array->array[i];
+    }
+    array->size++;
+
+    String* cur_line = array->array[idx_row];
+    
+    // insert new line
+    String* new_line = StringInit();
+    StringAppend(new_line, &cur_line->str[idx_col]);
+    array->array[idx_row+1] = new_line;
+
+    // resize current line
+    StringResize(cur_line, idx_col);
+}
+
+void ArrayMergeLines(Array* array, int idx_row) { // Delete a line
+    String *cur_line = array->array[idx_row-1], 
+           *next_line = array->array[idx_row];
+
+    // Shift left lines
+    for (size_t i = idx_row; i + 1 < array->size; i++) {
+        array->array[i] = array->array[i+1];
+    }
+    array->size--;
+
+
+    StringAppend(cur_line, next_line->str);
+
+    StringDestroy(next_line);
+}
+
+void ArrayDestroy(Array* array) {
+    for (size_t i = 0; i < array->size; i++) {
+        StringDestroy(array->array[i]);
+    }
+    free(array->array);
+}
+
+
 // Editor Modes
 enum MODE {
     NORMAL = 0,
@@ -339,90 +425,6 @@ void EnableRawMode () {
 
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-}
-
-// make a dyncamic array to store lines
-typedef struct 
-{
-    size_t size;
-    size_t capacity;
-    String** array;
-} ArrayBuffer;
-
-ArrayBuffer* array_buffer;
-
-ArrayBuffer* ArrayBufferInit() {
-    ArrayBuffer* array_buffer = (ArrayBuffer*)malloc(sizeof(array_buffer));
-    array_buffer->size = 0;
-    array_buffer->capacity = 10;
-    array_buffer->array = (String**)malloc(array_buffer->capacity * sizeof(String*));
-
-    return array_buffer;
-}
-
-void ArrayBufferExpandCapacity(ArrayBuffer* array_buffer) {
-    array_buffer->capacity *= 2;
-    array_buffer->array = (String**)realloc(array_buffer->array, array_buffer->capacity * sizeof(String*));
-}
-
-void ArrayBufferAppend(ArrayBuffer* array_buffer, String* add) {
-    if (array_buffer->size == array_buffer->capacity) 
-        ArrayBufferExpandCapacity(array_buffer);
-    
-    array_buffer->array[array_buffer->size++] = add; 
-}
-
-void s_ArrayBufferAppend(ArrayBuffer* array_buffer, const char* add) {
-    if (array_buffer->size == array_buffer->capacity) 
-        ArrayBufferExpandCapacity(array_buffer);
-    
-    String* add_line = StringInit();
-    StringAppend(add_line, add);
-    array_buffer->array[array_buffer->size++] = add_line; 
-}
-
-void ArrayBufferSplitLine(ArrayBuffer* array_buffer, int idx_row, int idx_col) {
-    if (array_buffer->size == array_buffer->capacity) 
-        ArrayBufferExpandCapacity(array_buffer);
-    
-    // Shift right rows
-    for (int i = array_buffer->size - 1; i > idx_row; i--) {
-        array_buffer->array[i+1] = array_buffer->array[i];
-    }
-    array_buffer->size++;
-
-    String* cur_line = array_buffer->array[idx_row];
-    
-    // insert new line
-    String* new_line = StringInit();
-    StringAppend(new_line, &cur_line->str[idx_col]);
-    array_buffer->array[idx_row+1] = new_line;
-
-    // resize current line
-    StringResize(cur_line, idx_col);
-}
-
-void ArrayBufferMergeLines(ArrayBuffer* array_buffer, int idx_row) { // Delete a line
-    String *cur_line = array_buffer->array[idx_row-1], 
-           *next_line = array_buffer->array[idx_row];
-
-    // Shift left lines
-    for (size_t i = idx_row; i + 1 < array_buffer->size; i++) {
-        array_buffer->array[i] = array_buffer->array[i+1];
-    }
-    array_buffer->size--;
-
-
-    StringAppend(cur_line, next_line->str);
-
-    StringDestroy(next_line);
-}
-
-void ArrayBufferDestroy(ArrayBuffer* array_buffer) {
-    for (size_t i = 0; i < array_buffer->size; i++) {
-        StringDestroy(array_buffer->array[i]);
-    }
-    free(array_buffer->array);
 }
 
 void DrawTildes() {
@@ -557,16 +559,16 @@ void ReadFileToBuffer(const char *filename) {
     fptr = fopen(filename, "r");
 
     if (fptr == NULL) { // The file doesn't exist
-        s_ArrayBufferAppend(array_buffer ,"");
+        s_ArrayAppend(array_buffer ,"");
         return;
     }
 
     while (getline(&buffer, &len, fptr) != -1) {
         buffer[strlen(buffer) - 1] = '\0';
-        s_ArrayBufferAppend(array_buffer, buffer);
+        s_ArrayAppend(array_buffer, buffer);
     }
     if (array_buffer->size == 0) {
-        s_ArrayBufferAppend(array_buffer, "");
+        s_ArrayAppend(array_buffer, "");
     }
     fclose(fptr);
 }
@@ -742,7 +744,7 @@ void SaveBuffer(String* filename) {
 }
 
 void ExecuteCommand() {
-    ArrayBuffer* paramaters = ArrayBufferInit();
+    Array* paramaters = ArrayInit();
     String* command = NULL, *token = StringInit();
 
     int command_extraced = 0;
@@ -750,9 +752,9 @@ void ExecuteCommand() {
         if (editor.command->str[i] != ' ') {
             StringInsertChar(token, token->size, editor.command->str[i]);
         }
-        if (i == editor.command->size - 1 || editor.command->str[i] == ' ') {
+        if (i + 1 == editor.command->size || editor.command->str[i] == ' ') {
             if (command_extraced) {
-                ArrayBufferAppend(paramaters, token);
+                ArrayAppend(paramaters, token);
                 token = StringInit();
             } else {
                 command = token;
@@ -788,7 +790,7 @@ void ExecuteCommand() {
     }
     StringDestroy(command);
     StringDestroy(token);
-    ArrayBufferDestroy(paramaters);
+    ArrayDestroy(paramaters);
 
     if (should_quit)  {
         exit(0);   
@@ -799,7 +801,7 @@ void ExecuteCommand() {
 void InsertProccessKey(int key) {
     // New line
     if (key == '\r') {
-        ArrayBufferSplitLine(array_buffer ,editor.cur_line, editor.cur_column);
+        ArraySplitLine(array_buffer ,editor.cur_line, editor.cur_column);
         MoveCursorAndScroll(CURSOR_DOWN);
         MoveCursorAndScroll(HOME);
     }
@@ -817,7 +819,7 @@ void InsertProccessKey(int key) {
             String* prev_line = array_buffer->array[editor.cur_line - 1];
             size_t prev_size = prev_line->size;
 
-            ArrayBufferMergeLines(array_buffer, editor.cur_line);
+            ArrayMergeLines(array_buffer, editor.cur_line);
             editor.cur_column = editor.max_column = prev_size;
             ScrollUp();
             CalculateCursorX();
@@ -832,7 +834,7 @@ void InsertProccessKey(int key) {
         if (editor.cur_column < (int)cur_line->size) {
             StringDeleteChar(cur_line, editor.cur_column);
         } else if (editor.cur_line < (int)array_buffer->size - 1) {
-            ArrayBufferMergeLines(array_buffer ,editor.cur_line + 1);
+            ArrayMergeLines(array_buffer ,editor.cur_line + 1);
         }
     }
     // Move key
@@ -950,7 +952,7 @@ void EditorProccessKey() {
 }
 
 void cleanup() {
-    ArrayBufferDestroy(array_buffer);
+    ArrayDestroy(array_buffer);
     EditorDestroy();
     DisableRawMode();
 }
@@ -958,12 +960,12 @@ void cleanup() {
 int main(int argc, char** argv) {
     EditorInit();
     EnableRawMode();
-    array_buffer = ArrayBufferInit();
+    array_buffer = ArrayInit();
     atexit(cleanup);
     if (argc > 1) {
         ReadFileToBuffer(argv[1]);
     } else {
-        s_ArrayBufferAppend(array_buffer, "");
+        s_ArrayAppend(array_buffer, "");
     }
     while (1) {
         GetWindowSize(&editor.window_rows, &editor.window_cols);
