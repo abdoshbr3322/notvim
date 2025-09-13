@@ -725,13 +725,13 @@ void ScrollDown() {
 }
 
 void GoToFileEnd() {
-    if (array_buffer->size == 0) 
+    if (array_buffer->size <= 1) 
         return;
 
     editor.start_line = editor.cur_line = array_buffer->size - 1; // in case of the number of lines is less than window size
 
     int lines_needed = 0;
-    while (1) {
+    while (editor.start_line) {
         String* cur_line = array_buffer->array[editor.start_line];
 
         // calculate number of lines in the terminal needed to render the current line
