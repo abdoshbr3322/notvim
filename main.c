@@ -488,7 +488,7 @@ void StatusBar() {
     {
     case NORMAL:
         if (editor.file_name->size < 40) {
-            StringAppend(message, editor.file_name->str);
+            StringAppend(message, editor.status_message->str);
         }
         break;
     case INSERT:
@@ -742,6 +742,11 @@ void MoveCursorAndScroll(int move) {
 
 }
 
+void NormalModeOn() {
+    editor.mode = NORMAL;
+    StringAssign(editor.status_message, editor.file_name->str);
+}
+
 // command line stuff
 void SaveBuffer(String* filename) {
     FILE* fptr;
@@ -798,6 +803,8 @@ void ExecuteCommand() {
             SaveBuffer(paramaters->array[0]);
         } else if (editor.file_opened) {
             SaveBuffer(editor.file_name);
+        } else {
+            StringAssign(editor.status_message, "No File Specified");
         }
     }
     else if (strcmp(command->str, "wq") == 0) {
@@ -807,6 +814,8 @@ void ExecuteCommand() {
         } else if (editor.file_opened) {
             SaveBuffer(editor.file_name);
             should_quit = 1;
+        } else {
+            StringAssign(editor.status_message, "No File Specified");
         }
     }
     StringDestroy(command);
@@ -914,8 +923,8 @@ void CommandProccessKey(int key) {
     }
 
     if (key == '\r') {
+        NormalModeOn();
         ExecuteCommand();
-        editor.mode = NORMAL;
     }
 
     else if (key == 127) { // Backspace
@@ -923,7 +932,7 @@ void CommandProccessKey(int key) {
             StringDeleteChar(editor.command, --editor.command_cursor_pos);
         }
         else { // otherwise quit command line mdoe
-            editor.mode = NORMAL;
+            NormalModeOn();
             return;
         }
     }
@@ -949,7 +958,7 @@ void EditorProccessKey() {
 
     // reset to normal mode when pressing Escape
     if (key == ESC) {
-        editor.mode = NORMAL;
+        NormalModeOn();
     }
 
     switch (editor.mode)
