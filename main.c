@@ -256,6 +256,24 @@ void StringResize(String* string, int new_size) {
     }
 }
 
+void StringAssign(String* string ,const char* new_string) {
+    size_t new_len = strlen(new_string);
+    if (string->capacity < (new_len)) {
+        
+        string->capacity = (new_len) * 2;
+        string->str = realloc(string->str ,string->capacity);
+    
+        // Exit the program with error message if memory wasn't allocated
+        if (string->str == NULL) {
+            ShowError("Memory couldn't be allocated");
+        }
+    }
+
+    memcpy(string->str, new_string, new_len);
+    string->size = new_len;
+    string->str[string->size] = 0;
+}
+
 void StringClear(String* string) {
     StringResize(string, 0);
 }
@@ -302,7 +320,7 @@ void s_ArrayAppend(Array* array, const char* add) {
         ArrayExpandCapacity(array);
     
     String* add_line = StringInit();
-    StringAppend(add_line, add);
+    StringAssign(add_line, add);
     array->array[array->size++] = add_line; 
 }
 
@@ -320,7 +338,7 @@ void ArraySplitLine(Array* array, int idx_row, int idx_col) {
     
     // insert new line
     String* new_line = StringInit();
-    StringAppend(new_line, &cur_line->str[idx_col]);
+    StringAssign(new_line, &cur_line->str[idx_col]);
     array->array[idx_row+1] = new_line;
 
     // resize current line
@@ -368,10 +386,11 @@ typedef struct
     int cursor_x, cursor_y;
     int file_opened;
     int buffer_modified;
-    String* file_name;
     int start_line, end_line;
     int cur_line, cur_column;
     int max_column;
+    String* status_message;
+    String* file_name;
     String* command;
     int command_cursor_pos;
 } Editor;
@@ -387,15 +406,17 @@ void EditorInit() {
     editor.cursor_x = editor.cursor_y = 1;
     editor.file_opened = 0;
     editor.buffer_modified = 0;
-    editor.file_name = StringInit();
     editor.start_line = editor.end_line = 0;
     editor.cur_line = editor.cur_column = 0;
     editor.max_column = 0;
+    editor.status_message = StringInit();
+    editor.file_name = StringInit();
     editor.command = StringInit();
     editor.command_cursor_pos = 0;
 }
 
 void EditorDestroy() {
+    StringDestroy(editor.status_message);
     StringDestroy(editor.file_name);
     StringDestroy(editor.command);
 }
@@ -549,7 +570,8 @@ void ReadFileToBuffer(const char *filename) {
     
     // change the global state for the file
     editor.file_opened = 1;
-    StringAppend(editor.file_name, filename);
+    StringAssign(editor.file_name, filename);
+    StringAssign(editor.status_message, filename);
     
     FILE *fptr;
     char* buffer = NULL; 
@@ -761,7 +783,6 @@ void ExecuteCommand() {
                 command_extraced = 1;
                 token = StringInit();
             }
-        } else {
         }
     }
 
