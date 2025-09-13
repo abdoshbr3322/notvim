@@ -707,23 +707,36 @@ void MoveCursorAndScroll(int move) {
         break;
     case CURSOR_RIGHT:
     case 'l':
+        cur_line = array_buffer->array[editor.cur_line];
         if (editor.cur_column < (int)cur_line->size)
-            editor.max_column++;
+            editor.max_column = editor.cur_column + 1;
+        else if ((editor.cur_line + 1) < array_buffer->size) {
+            MoveCursorAndScroll(CURSOR_DOWN);
+            cur_line = array_buffer->array[editor.cur_line];
+            editor.max_column = 0;
+        }
         break;
     case CURSOR_LEFT:
     case 'h':
         if (editor.cur_column > 0)
-            editor.max_column--;
+            editor.max_column = editor.cur_column - 1;
+        else if (editor.cur_line > 0) {
+            MoveCursorAndScroll(CURSOR_UP);
+            cur_line = array_buffer->array[editor.cur_line];
+            editor.max_column = cur_line->size;
+        }
         break;
     case PAGE_UP:
         for (size_t i = 0; i < editor.window_rows; i++) {
             MoveCursorAndScroll(CURSOR_UP);
         }
+        cur_line = array_buffer->array[editor.cur_line];
         break;
     case PAGE_DOWN:
         for (size_t i = 0; i < editor.window_rows; i++) {
             MoveCursorAndScroll(CURSOR_DOWN);
         }
+        cur_line = array_buffer->array[editor.cur_line];
         break;
     case HOME:
         editor.max_column = 0;
