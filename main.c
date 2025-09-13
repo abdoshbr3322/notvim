@@ -783,7 +783,7 @@ void MoveCursorAndScroll(int move) {
         cur_line = array_buffer->array[editor.cur_line];
         if (editor.cur_column < (int)cur_line->size)
             editor.max_column = editor.cur_column + 1;
-        else if ((editor.cur_line + 1) < array_buffer->size) {
+        else if ((editor.cur_line + 1) < (int)array_buffer->size) {
             MoveCursorAndScroll(CURSOR_DOWN);
             cur_line = array_buffer->array[editor.cur_line];
             editor.max_column = 0;
@@ -830,7 +830,7 @@ void MoveCursorAndScroll(int move) {
 
 void MoveForward() {
     int found_separtor = 0;
-    while ((editor.cur_line + 1) < array_buffer->size || (editor.cur_column + 1) < array_buffer->array[editor.cur_line]->size) {
+    while ((editor.cur_line + 1) < (int)array_buffer->size || (editor.cur_column + 1) < (int)array_buffer->array[editor.cur_line]->size) {
         char c = array_buffer->array[editor.cur_line]->str[editor.cur_column];
         if (!IsKeyword(c)) {
             found_separtor = 1;
@@ -960,6 +960,8 @@ void ExecuteCommand() {
         } else {
             StringAssign(editor.status_message, "No File Specified");
         }
+    } else {
+        StringAssign(editor.status_message, "Not an editor command");
     }
     StringDestroy(command);
     StringDestroy(token);
@@ -1037,7 +1039,7 @@ void NormalProccessKey(int key) {
         UpdateMotionCount(key - '0');
         return;
     }
-     
+
     if (IsMotion(key)) {
         Motion(key);
     }
@@ -1066,7 +1068,7 @@ void CommandProccessKey(int key) {
     switch (key) // Moving keys
     {
     case CURSOR_RIGHT:
-        if (editor.command_cursor_pos < editor.command->size) {
+        if (editor.command_cursor_pos < (int)editor.command->size) {
             editor.command_cursor_pos++;
         }
         break;
@@ -1094,7 +1096,7 @@ void CommandProccessKey(int key) {
         }
     }
 
-    else if (key == DELETE && editor.command_cursor_pos < editor.command->size) { // Delete Forward
+    else if (key == DELETE && editor.command_cursor_pos < (int)editor.command->size) { // Delete Forward
         StringDeleteChar(editor.command, editor.command_cursor_pos);
     }
 
