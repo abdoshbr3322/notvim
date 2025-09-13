@@ -62,6 +62,10 @@ int IsPrintableCharacter(char c) {
     return (c >= 32 && c < 127);
 }
 
+int IsKeyword(int key) {
+    return (key == '_' || (key >= '9' && key <= '9') || (key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z'));
+}
+
 int IsMoveKeyNormal(int key) {
     switch (key)
     {
@@ -100,6 +104,18 @@ int IsMoveKey(int key) {
     }
 }
 
+int IsMotion(int key) {
+    switch (key)
+    {
+    case 'g':
+    case 'G':
+    case 'w':
+    case 'b':
+        return 1;
+    default:
+        return 0;
+    }
+}
 
 // TODO : Fix ShowError function
 // Shows error message and exits
@@ -278,9 +294,9 @@ void StringClear(String* string) {
     StringResize(string, 0);
 }
 
-void StringDestroy(String* str) {
-    free(str->str);
-    free(str);
+void StringDestroy(String* string) {
+    free(string->str);
+    free(string);
 }
 
 
@@ -393,6 +409,7 @@ typedef struct
     String* file_name;
     String* command;
     int command_cursor_pos;
+    int motion_count;
 } Editor;
 
 Editor editor;
@@ -413,6 +430,7 @@ void EditorInit() {
     editor.file_name = StringInit();
     editor.command = StringInit();
     editor.command_cursor_pos = 0;
+    editor.motion_count = 0;
 }
 
 void EditorDestroy() {
@@ -446,6 +464,11 @@ void EnableRawMode () {
 
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+void UpdateMotionCount(int digit) {
+    if (editor.motion_count < 1e5) // why whould anyone need more than this? If some really does, I don't care
+        editor.motion_count = editor.motion_count * 10 + digit;
 }
 
 void DrawTildes() {
@@ -506,6 +529,22 @@ void StatusBar() {
     }
     StringAppend(message, COLOR_RESET);
     write(STDOUT_FILENO, message->str, message->size);
+
+    if (editor.motion_count > 0 && (editor.mode == NORMAL || editor.mode == VISUAL)) { // show motion count 
+        String* count_message = StringInit();
+
+        char count[10];
+        snprintf(count, sizeof(count), "%d", editor.motion_count);
+
+        char count_pos[20];
+        snprintf(count_pos, sizeof(count_pos), "\x1b[%zu;%zuH", editor.window_rows, editor.window_cols - 10 - strlen(count));
+
+        StringAppend(count_message, count_pos);
+        StringAppend(count_message, count);
+    
+        write(STDOUT_FILENO, count_message->str, count_message->size);
+        StringDestroy(count_message);
+    }
 
     if (editor.mode != COMMAND_LINE) { // show cursor position when Command line mode is off
         String* status_buffer = StringInit();
@@ -685,6 +724,40 @@ void ScrollDown() {
     }
 }
 
+void GoToFileEnd() {
+    if (array_buffer->size == 0) 
+        return;
+
+    editor.start_line = editor.cur_line = array_buffer->size - 1; // in case of the number of lines is less than window size
+
+    int lines_needed = 0;
+    while (1) {
+        String* cur_line = array_buffer->array[editor.start_line];
+
+        // calculate number of lines in the terminal needed to render the current line
+        int needed = (cur_line->size ? ceil_d(cur_line->size, editor.window_cols) : 1);
+        lines_needed += needed;
+
+        if (lines_needed + 1 >= (int)editor.window_rows)
+            break;
+        editor.start_line--;
+    }
+    
+    editor.cur_column = editor.max_column = 0;
+    CalculateCursorX();
+    CalculateCursorY();
+}
+
+void GoToFileStart() {
+    if (array_buffer->size == 0) 
+        return;
+
+    editor.start_line = editor.cur_line = 0; // in case of the number of lines is less than window size
+    editor.cur_column = editor.max_column = 0;
+    CalculateCursorX();
+    CalculateCursorY();
+}
+
 void MoveCursorAndScroll(int move) {
     if (array_buffer->size == 0) return;
     String* cur_line = array_buffer->array[editor.cur_line];
@@ -755,8 +828,65 @@ void MoveCursorAndScroll(int move) {
 
 }
 
+void MoveForward() {
+    int found_separtor = 0;
+    while ((editor.cur_line + 1) < array_buffer->size || (editor.cur_column + 1) < array_buffer->array[editor.cur_line]->size) {
+        char c = array_buffer->array[editor.cur_line]->str[editor.cur_column];
+        if (!IsKeyword(c)) {
+            found_separtor = 1;
+        }
+        if (found_separtor && IsKeyword(c)) {
+            break;
+        }
+        MoveCursorAndScroll(CURSOR_RIGHT);
+    }
+}
+
+void MoveBackward() {
+    int found_separtor = 0;
+    while (editor.cur_line > 0 || editor.cur_column > 0) {
+        char c = array_buffer->array[editor.cur_line]->str[editor.cur_column];
+        if (!IsKeyword(c)) {
+            found_separtor = 1;
+        }
+        if (found_separtor && IsKeyword(c)) {
+            break;
+        }
+        MoveCursorAndScroll(CURSOR_LEFT);
+    }
+}
+
+void Motion(int key) {
+    switch (key)
+    {
+    case 'g':   
+        GoToFileStart();
+        break;
+    case 'G':
+        GoToFileEnd();
+        break;
+    case 'w':
+        editor.motion_count = max(1, editor.motion_count);
+        for (int i = 0; i < editor.motion_count; i++) {
+            MoveForward();
+        }
+        editor.motion_count = 0;
+        break;
+    case 'b':
+        editor.motion_count = max(1, editor.motion_count);
+        for (int i = 0; i < editor.motion_count; i++) {
+            MoveBackward();
+        }
+        editor.motion_count = 0;
+        break;
+    default:
+        break;
+    }
+}
+
 void NormalModeOn() {
     editor.mode = NORMAL;
+    editor.motion_count = 0;
     StringAssign(editor.status_message, editor.file_name->str);
 }
 
@@ -896,9 +1026,23 @@ void InsertProccessKey(int key) {
 
 void NormalProccessKey(int key) {
     if (IsMoveKeyNormal(key)) {
-        MoveCursorAndScroll(key);
+        editor.motion_count = max(1, editor.motion_count);
+        for (int i = 0; i < editor.motion_count; i++) {
+            MoveCursorAndScroll(key);
+        }
+        editor.motion_count = 0;
     }
 
+    if (isdigit(key)) {
+        UpdateMotionCount(key - '0');
+        return;
+    }
+     
+    if (IsMotion(key)) {
+        Motion(key);
+    }
+    
+    // switch between modes
     switch (key)
     {
     case 'i':
