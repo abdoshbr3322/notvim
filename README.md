@@ -52,12 +52,12 @@ make
   - [X] Improve Scrolling 
   - [ ] Syntax Highlihgting
 
-- [ ] Writing to files
-  - [ ] Save commands
-  - [ ] Save buffer contents
+- [X] Writing to files
+  - [X] Save commands
+  - [X] Save buffer contents
   
 - [ ] Implement different modes
-  - [ ] Normal mode
+  - [X] Normal mode
   - [X] Insert mode
   - [ ] Visual mode
-  - [ ] Command mode
+  - [X] Command Line mode
