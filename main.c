@@ -168,17 +168,24 @@ String* StringInit() {
     return string;
 }
 
+void StringExpandCapacity(String* string, size_t new_capacity) {
+    if (new_capacity <= string->capacity) {
+        ShowError("the new capcacity size should be > old");
+    }
+
+    string->capacity = new_capacity;
+    string->str = realloc(string->str, string->capacity);
+
+    // Exit the program with error message if memory wasn't allocated
+    if (string->str == NULL) {
+        ShowError("Memory couldn't be allocated");
+    }
+}
+
 void StringAppend(String *string, const char* add) {
     size_t add_len = strlen(add);
     if (string->capacity <= (string->size + add_len)) {
-        
-        string->capacity = (string->size + add_len) * 2;
-        string->str = realloc(string->str ,string->capacity);
-    
-        // Exit the program with error message if memory wasn't allocated
-        if (string->str == NULL) {
-            ShowError("Memory couldn't be allocated");
-        }
+        StringExpandCapacity(string, (string->size + add_len) * 2);
     }
 
     memcpy(&string->str[string->size], add, add_len);
@@ -195,15 +202,8 @@ void StringInsert(String* string, size_t pos, const char* add) {
     }
 
     size_t add_len = strlen(add);
-    if (string->capacity < (string->size + add_len)) {
-        
-        string->capacity = (string->size + add_len) * 2;
-        string->str = realloc(string->str ,string->capacity);
-    
-        // Exit the program with error message if memory wasn't allocated
-        if (string->str == NULL) {
-            ShowError("Memory couldn't be allocated");
-        }
+    if (string->capacity <= (string->size + add_len)) {
+        StringExpandCapacity(string, (string->size + add_len) * 2);
     }
 
     // move the current string after pos to the right
@@ -222,16 +222,8 @@ void StringInsertChar(String* string, int pos, const char add) {
         return;
     }
 
-    if (string->capacity <= string->size + 1) {
-        
-        string->capacity = (string->size + 1) * 2;
-        string->str = realloc(string->str ,string->capacity);
-    
-        // Exit the program with error message if memory wasn't allocated
-        if (string->str == NULL) {
-            free(string);
-            ShowError("Memory couldn't be allocated");
-        }
+    if (string->capacity <= string->size + 1) {        
+        StringExpandCapacity(string, (string->size + 1) * 2);
     }
 
     // shift chars right
@@ -274,15 +266,8 @@ void StringResize(String* string, int new_size) {
 
 void StringAssign(String* string ,const char* new_string) {
     size_t new_len = strlen(new_string);
-    if (string->capacity < (new_len)) {
-        
-        string->capacity = (new_len) * 2;
-        string->str = realloc(string->str ,string->capacity);
-    
-        // Exit the program with error message if memory wasn't allocated
-        if (string->str == NULL) {
-            ShowError("Memory couldn't be allocated");
-        }
+    if (string->capacity <= (new_len)) {
+        StringExpandCapacity(string, new_len * 2);
     }
 
     memcpy(string->str, new_string, new_len);
