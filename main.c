@@ -603,11 +603,19 @@ void ReadFileToBuffer(const char *filename) {
         return;
     }
 
+    int last_line = 1;
     while (getline(&buffer, &len, fptr) != -1) {
-        buffer[strlen(buffer) - 1] = '\0';
+        size_t sz = strlen(buffer);
+        if (buffer[sz-1] == '\n') {
+            buffer[strlen(buffer) - 1] = '\0';
+        } else {
+            last_line = 0;
+        }
+
         s_ArrayAppend(array_buffer, buffer);
     }
-    if (array_buffer->size == 0) {
+
+    if (last_line) {
         s_ArrayAppend(array_buffer, "");
     }
     fclose(fptr);
