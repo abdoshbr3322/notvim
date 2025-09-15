@@ -124,18 +124,23 @@ int IsMotion(int key) {
     }
 }
 
+int screen_changed = 0;
+
 void ResetScreenBuffer() {
+    screen_changed = 0;
     write(STDOUT_FILENO ,"\x1b[?1049l", 8);
 }
 
 void ChangeScreenBuffer() {
     write(STDOUT_FILENO ,"\x1b[?1049h", 8);
+    screen_changed = 1;
 }
 
 // Shows error message and exits
 void ShowError(const char *message) {
-    ResetScreenBuffer();
-    printf("%s Error in %s : %s %s \n", RED, message, strerror(errno), COLOR_RESET);
+    if (screen_changed)
+        ResetScreenBuffer();
+    printf("%s Error : %s -> %s \n", RED, message, strerror(errno), COLOR_RESET);
     exit(1);
 }
 
@@ -1344,7 +1349,28 @@ void cleanup() {
     DisableRawMode();
 }
 
+void ShowHelpFile() {
+    FILE* fptr = fopen("help.txt", "r");
+    
+    if (fptr == NULL) { // The file doesn't exist
+        ShowError("Couldn't open help file");
+    }
+    
+    char *buffer;
+    size_t len;
+    while (getline(&buffer, &len, fptr) != -1) {
+        printf(buffer);        
+    }
+
+    fclose(fptr);
+    
+}
+
 int main(int argc, char** argv) {
+    if (argc > 1 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
+        ShowHelpFile();
+        return 0;
+    }
     EditorInit();
     ChangeScreenBuffer();
     EnableRawMode();
@@ -1360,5 +1386,5 @@ int main(int argc, char** argv) {
         EditorClearScreen();
         EditorProccessKey();
     }
-    
+
 }

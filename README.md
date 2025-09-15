@@ -35,7 +35,10 @@ make
 ./notvim [filename]
 ```
 
-
+4. Show help file:
+```bash
+./notvim -h
+```
 
 ## Todo List
 

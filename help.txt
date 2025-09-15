@@ -1,0 +1,43 @@
+NOTVIM HELP
+===========
+
+NORMAL MODE COMMANDS
+------------------
+i, s     : Enter Insert mode
+v        : Enter Visual mode
+:        : Enter Command Line mode
+ESC      : Return to Normal mode from any mode
+
+NAVIGATION (NORMAL & VISUAL MODE)
+-------------------------------
+[number] : Repeat next motion n times
+h or ←   : Move cursor left
+j or ↓   : Move cursor down
+k or ↑   : Move cursor up
+l or →   : Move cursor right
+w        : Move forward by word
+b        : Move backward by word
+g        : Go to start of file
+G        : Go to end of file
+HOME     : Go to start of line
+END      : Go to end of line
+PAGE UP  : Move up one screen
+PAGE DOWN: Move down one screen
+
+VISUAL MODE
+----------
+y        : Yank (copy) selected text
+d        : Delete selected text
+p        : Replace selected text with yanked text
+
+NORMAL MODE EDITING
+-----------------
+p        : Paste yanked text
+
+COMMAND MODE
+-----------
+:w       : Save file
+:w file  : Save as file
+:q       : Quit
+:wq      : Save and quit
+:wq file : Save as file and quit
