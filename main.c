@@ -169,7 +169,7 @@ String* StringInit() {
         ShowError("Memory couldn't be allocated");
     }
 
-    // insert string terminator
+    // insert null terminator
     string->str[string->size] = 0;
 
     return string;
@@ -324,6 +324,17 @@ void s_ArrayAppend(Array* array, const char* add) {
     String* add_line = StringInit();
     StringAssign(add_line, add);
     array->array[array->size++] = add_line; 
+}
+
+void ArrayDelete(Array* array, size_t pos) {
+    if (pos >= array->size) {
+        ShowError("Incorrect Bounds");
+    }
+
+    for (size_t i = pos; (i + 1) < array->size; i++) {
+        array->array[i] = array->array[i+1];
+    }
+    array->size--;
 }
 
 void ArraySplitLine(Array* array, int idx_row, int idx_col) {
@@ -1062,6 +1073,27 @@ void BufferInsert(char c) {
     }
 }
 
+// delete from buffer backward
+void BufferDelete() {
+    String* cur_line = array_buffer->array[editor.cur_line];
+    if (editor.cur_column > 0) { // Delete a char
+        StringDeleteChar(cur_line, editor.cur_column - 1);
+        MoveCursorAndScroll(CURSOR_LEFT);
+    } 
+    
+    else if (editor.cur_line > 0) { // Delete a line
+        // get prev line size to move the cursor after it
+        String* prev_line = array_buffer->array[editor.cur_line - 1];
+        size_t prev_size = prev_line->size;
+
+        ArrayMergeLines(array_buffer, editor.cur_line);
+        editor.cur_column = editor.max_column = prev_size;
+        ScrollUp();
+        CalculateCursorX();
+        CalculateCursorY();
+    }
+}
+
 void Yank() {
     StringClear(editor.yanked);
     size_t st_l = editor.v_start_line, st_c = editor.v_start_col;
@@ -1095,8 +1127,27 @@ void Yank() {
     }
 }
 
+void Delete(int from_paste) {
+    if (!from_paste)
+        Yank();
+        
+    size_t st_l = editor.v_start_line, st_c = editor.v_start_col;
+    size_t en_l = editor.cur_line, en_c = editor.cur_column;
+
+    if (en_l < st_l) {
+        swap(&st_l, &en_l);
+        swap(&st_c, &en_c);
+    } else if (en_l == st_l && en_c < st_c) {
+        swap(&st_c, &en_c);
+    }
+    editor.cur_line = en_l, editor.cur_column = en_c;
+    while (editor.cur_line != st_l || editor.cur_column != st_c) {
+        BufferDelete();
+    }
+}
+
 void Paste() {
-    for (int i = 0; i < editor.yanked->size; i++) {
+    for (size_t i = 0; i < editor.yanked->size; i++) {
         if (editor.yanked->str[i] == '\n') {
             BufferInsert('\r');
         } else {
@@ -1109,23 +1160,7 @@ void Paste() {
 void InsertProccessKey(int key) {
     // Backspace -> Delete backward
     if (key == 127) {
-        String* cur_line = array_buffer->array[editor.cur_line];
-        if (editor.cur_column > 0) { // Delete a char
-            StringDeleteChar(cur_line, editor.cur_column - 1);
-            MoveCursorAndScroll(CURSOR_LEFT);
-        } 
-        
-        else if (editor.cur_line > 0) { // Delete a line
-            // get prev line size to move the cursor after it
-            String* prev_line = array_buffer->array[editor.cur_line - 1];
-            size_t prev_size = prev_line->size;
-
-            ArrayMergeLines(array_buffer, editor.cur_line);
-            editor.cur_column = editor.max_column = prev_size;
-            ScrollUp();
-            CalculateCursorX();
-            CalculateCursorY();
-        }
+        BufferDelete();
         return;
     } 
 
@@ -1244,10 +1279,18 @@ void VisualProccessKey(int key) {
 
     else if (key == 'y') {
         Yank();
+        NormalModeOn();
     } 
     
     else if (key == 'd') {
-        // Paste();
+        Delete(0);
+        NormalModeOn();
+    }
+
+    else if (key == 'p') {
+        Delete(1);
+        Paste();
+        NormalModeOn();
     }
 }
 void EditorProccessKey() {
