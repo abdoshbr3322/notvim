@@ -56,8 +56,8 @@ make
   - [X] Save commands
   - [X] Save buffer contents
   
-- [ ] Implement different modes
+- [X] Implement different modes
   - [X] Normal mode
   - [X] Insert mode
-  - [ ] Visual mode
+  - [X] Visual mode
   - [X] Command Line mode
