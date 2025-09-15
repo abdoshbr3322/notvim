@@ -124,12 +124,17 @@ int IsMotion(int key) {
     }
 }
 
-// TODO : Fix ShowError function
+void ResetScreenBuffer() {
+    write(STDOUT_FILENO ,"\x1b[?1049l", 8);
+}
+
+void ChangeScreenBuffer() {
+    write(STDOUT_FILENO ,"\x1b[?1049h", 8);
+}
+
 // Shows error message and exits
 void ShowError(const char *message) {
-    write(STDOUT_FILENO, "\x1b[2J", 4);
-    write(STDOUT_FILENO, "\x1b[H", 3);
-
+    ResetScreenBuffer();
     printf("%s Error in %s : %s %s \n", RED, message, strerror(errno), COLOR_RESET);
     exit(1);
 }
@@ -202,6 +207,7 @@ void StringAppend(String *string, const char* add) {
 
 void StringInsert(String* string, size_t pos, const char* add) {
     if (pos > string->size) {
+        ShowError("Out of bound");
         return;
     } else if (pos == string->size) {
         StringAppend(string, add);
@@ -225,7 +231,7 @@ void StringInsert(String* string, size_t pos, const char* add) {
 
 void StringInsertChar(String* string, int pos, const char add) {
     if (pos > (int)string->size) {
-        // TODO : Show Error
+        ShowError("Out of bound");
         return;
     }
 
@@ -247,7 +253,7 @@ void StringInsertChar(String* string, int pos, const char add) {
 
 void StringDeleteChar(String* string, int pos) {
     if (pos >= (int)string->size) {
-        // TODO : Show Error
+        ShowError("Out of bound");
         return;
     }
 
@@ -301,16 +307,27 @@ Array* array_buffer;
 
 Array* ArrayInit() {
     Array* array = (Array*)malloc(sizeof(array));
+    if (array == NULL) {
+        ShowError("Memory couldn't be allocated");
+    }
     array->size = 0;
     array->capacity = 10;
     array->array = (String**)malloc(array->capacity * sizeof(String*));
 
+    if (array->array == NULL) {
+        free(array);
+        ShowError("Memory couldn't be allocated");
+    }
     return array;
 }
 
 void ArrayExpandCapacity(Array* array) {
     array->capacity *= 2;
     array->array = (String**)realloc(array->array, array->capacity * sizeof(String*));
+    if (array->array == NULL) {
+        free(array);
+        ShowError("Memory couldn't be allocated");
+    }
 }
 
 void ArrayAppend(Array* array, String* add) {
@@ -331,7 +348,7 @@ void s_ArrayAppend(Array* array, const char* add) {
 
 void ArrayDelete(Array* array, size_t pos) {
     if (pos >= array->size) {
-        ShowError("Incorrect Bounds");
+        ShowError("Out of bound");
     }
 
     for (size_t i = pos; (i + 1) < array->size; i++) {
@@ -446,10 +463,6 @@ void EditorDestroy() {
 
 void DisableRawMode () {
     tcsetattr(STDIN_FILENO, TCIFLUSH, &editor.default_term);
-
-    // reset the original screen buffer
-    write(STDOUT_FILENO ,"\x1b[?1049l", 8);
-    fflush(stdout);
 }
 
 void EnableRawMode () {
@@ -460,9 +473,6 @@ void EnableRawMode () {
     raw.c_iflag &= ~(IXON | ICRNL);
     raw.c_oflag &= ~(OPOST);
     raw.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);
-
-    // Switch to another screen buffer
-    write(STDOUT_FILENO ,"\x1b[?1049h", 8);
 
     raw.c_cc[VMIN] = 0;
     raw.c_cc[VTIME] = 1;
@@ -1054,6 +1064,7 @@ void ExecuteCommand() {
     ArrayDestroy(paramaters);
 
     if (should_quit)  {
+        ResetScreenBuffer();
         exit(0);   
     }
 }
@@ -1335,6 +1346,7 @@ void cleanup() {
 
 int main(int argc, char** argv) {
     EditorInit();
+    ChangeScreenBuffer();
     EnableRawMode();
     array_buffer = ArrayInit();
     atexit(cleanup);
