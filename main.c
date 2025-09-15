@@ -260,7 +260,10 @@ void StringDeleteChar(String* string, int pos) {
 
 }
 
-void StringResize(String* string, int new_size) {
+void StringResize(String* string, size_t new_size) {
+    if (new_size > string->size) {
+        StringExpandCapacity(string, new_size + 10);
+    }
     string->size = new_size;
     string->str[string->size] = 0;
 }
