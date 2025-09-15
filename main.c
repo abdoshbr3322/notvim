@@ -256,12 +256,6 @@ void StringDeleteChar(String* string, int pos) {
 void StringResize(String* string, int new_size) {
     string->size = new_size;
     string->str[string->size] = 0;
-    string->capacity = string->size + 10;
-    string->str = realloc(string->str ,string->capacity);
-    if (string->str == NULL) {
-        free(string);
-        ShowError("Memory couldn't be allocated");
-    }
 }
 
 void StringAssign(String* string ,const char* new_string) {
