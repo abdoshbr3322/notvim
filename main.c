@@ -795,7 +795,7 @@ void ScrollUp() {
 }
 
 void ScrollDown() {
-    if ((editor.end_line + 1) < ((int)array_buffer->size) &&  editor.cursor_y >= ((int)editor.window_rows - 6)) { // scroll down
+    if (((array_buffer->size) >= editor.window_rows) && (editor.end_line + 1) < ((int)array_buffer->size) &&  editor.cursor_y >= ((int)editor.window_rows - 6)) { // scroll down
         editor.cur_line++;
         editor.start_line++;
         editor.end_line++;
