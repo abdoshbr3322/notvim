@@ -20,6 +20,7 @@
 #define  CYAN        "\x1b[36m" 
 #define  WHITE       "\x1b[37m" 
 #define  COLOR_RESET "\x1b[0m" 
+#define  VISUAL_BG   "\x1b[48;5;24m"   
 
 #define BOLD_ON  "\x1b[1m"
 
@@ -43,6 +44,12 @@ int max(int a, int b) {
     return b;
 }
 
+void swap(size_t* a, size_t* b) {
+    *a = *a ^ *b;
+    *b = *a ^ *b;
+    *a = *a ^ *b;
+}
+
 // define keys enum
 enum KEYS {
     CURSOR_LEFT = 500,
@@ -63,7 +70,7 @@ int IsPrintableCharacter(char c) {
 }
 
 int IsKeyword(int key) {
-    return (key == '_' || (key >= '9' && key <= '9') || (key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z'));
+    return (key == '_' || (key >= '0' && key <= '9') || (key >= 'A' && key <= 'Z') || (key >= 'a' && key <= 'z'));
 }
 
 int IsMoveKeyNormal(int key) {
@@ -387,8 +394,11 @@ typedef struct
     String* status_message;
     String* file_name;
     String* command;
+    String* yanked;
     int command_cursor_pos;
     int motion_count;
+    int v_start_line;
+    int v_start_col;
 } Editor;
 
 Editor editor;
@@ -408,6 +418,7 @@ void EditorInit() {
     editor.status_message = StringInit();
     editor.file_name = StringInit();
     editor.command = StringInit();
+    editor.yanked = StringInit();
     editor.command_cursor_pos = 0;
     editor.motion_count = 0;
 }
@@ -416,6 +427,7 @@ void EditorDestroy() {
     StringDestroy(editor.status_message);
     StringDestroy(editor.file_name);
     StringDestroy(editor.command);
+    StringDestroy(editor.yanked);
 }
 
 void DisableRawMode () {
@@ -446,7 +458,7 @@ void EnableRawMode () {
 }
 
 void UpdateMotionCount(int digit) {
-    if (editor.motion_count < 1e5) // why whould anyone need more than this? If some really does, I don't care
+    if (editor.motion_count < 1e5) // why whould anyone need more than this? If someone really does, I don't care
         editor.motion_count = editor.motion_count * 10 + digit;
 }
 
@@ -489,7 +501,7 @@ void StatusBar() {
     switch (editor.mode)
     {
     case NORMAL:
-        if (editor.file_name->size < 40) {
+        if (editor.status_message->size < 40) {
             StringAppend(message, editor.status_message->str);
         }
         break;
@@ -562,6 +574,23 @@ void ShowWelcomeMessage() {
 
 
 void ShowTextFromBuffer() {
+    int highlight_visual = 0;
+    size_t st_l, st_c, en_l, en_c;
+    if (editor.mode == VISUAL) {
+        st_l = editor.v_start_line, st_c = editor.v_start_col;
+        en_l = editor.cur_line, en_c = editor.cur_column;
+        
+        if (en_l < st_l) {
+            swap(&st_l, &en_l);
+            swap(&st_c, &en_c);
+        } else if (en_l == st_l && en_c < st_c) {
+            swap(&st_c, &en_c);
+        }
+        if ((st_l != en_l) || (st_c != en_c)) {
+            highlight_visual = 1;
+        }
+    }
+
     int lines_needed = 0;
     String* lines = StringInit();
     StringAppend(lines,  "\x1b[H");
@@ -574,10 +603,60 @@ void ShowTextFromBuffer() {
         // stop rendering when the terminal is full
         lines_needed += needed;
         if (lines_needed >= (int)editor.window_rows) break;
-
+        
+        // mark the last line rendered
         editor.end_line = line;
-        StringAppend(lines ,"\x1b[K");
-        StringAppend(lines ,cur_line->str);
+
+        StringAppend(lines ,"\x1b[K"); // clear 
+
+        // highlight selection in visual mode
+        if (highlight_visual && line == st_l && line == en_l) {
+            for (size_t c = 0; c < cur_line->size; c++) {
+                if (c == st_c) {
+                    StringAppend(lines, VISUAL_BG);
+                }
+                if (c == en_c) {
+                    StringAppend(lines, COLOR_RESET);
+                }
+                StringInsertChar(lines, lines->size, cur_line->str[c]);
+            }
+            if (en_c == cur_line->size) {
+                StringAppend(lines, COLOR_RESET);
+            }
+            highlight_visual = 0;
+        } 
+
+        else if (highlight_visual && line == st_l) {
+            for (size_t c = 0; c < cur_line->size; c++) {
+                if (c == st_c) {
+                    StringAppend(lines, VISUAL_BG);
+                }
+                StringInsertChar(lines, lines->size, cur_line->str[c]);
+            }
+            StringAppend(lines, COLOR_RESET);
+        }
+        else if (highlight_visual && line == en_l) {
+            StringAppend(lines, VISUAL_BG);
+            for (size_t c = 0; c < cur_line->size; c++) {
+                if (c == en_c) {
+                    StringAppend(lines, COLOR_RESET);
+                }
+                StringInsertChar(lines, lines->size, cur_line->str[c]);
+            }
+            if (en_c == cur_line->size) {
+                StringAppend(lines, COLOR_RESET);
+            }
+            highlight_visual = 0;
+        } 
+        else if (highlight_visual && line > st_l && line < en_l) {
+            StringAppend(lines, VISUAL_BG);
+            StringAppend(lines ,cur_line->str);
+            StringAppend(lines, COLOR_RESET);
+        } 
+        else { // no selection
+            StringAppend(lines ,cur_line->str);
+        }
+    
         StringAppend(lines, "\r\n");
     }
     write(STDOUT_FILENO ,lines->str, lines->size);
@@ -702,7 +781,7 @@ void ScrollUp() {
 }
 
 void ScrollDown() {
-    if (editor.end_line < ((int)array_buffer->size - 1) &&  editor.cursor_y >= ((int)editor.window_rows - 6)) { // scroll down
+    if ((editor.end_line + 1) < ((int)array_buffer->size) &&  editor.cursor_y >= ((int)editor.window_rows - 6)) { // scroll down
         editor.cur_line++;
         editor.start_line++;
         editor.end_line++;
@@ -877,6 +956,12 @@ void NormalModeOn() {
     StringAssign(editor.status_message, editor.file_name->str);
 }
 
+void VisualModeOn() {
+    editor.v_start_line = editor.cur_line;
+    editor.v_start_col = editor.cur_column;
+    editor.mode = VISUAL;
+}
+
 // command line stuff
 void SaveBuffer(String* filename) {
     FILE* fptr;
@@ -959,15 +1044,69 @@ void ExecuteCommand() {
     }
 }
 
-// Key proccessing for differnet modes
-void InsertProccessKey(int key) {
+// insert into buffer
+void BufferInsert(char c) {
     // New line
-    if (key == '\r') {
+    if (c == '\r') {
         ArraySplitLine(array_buffer ,editor.cur_line, editor.cur_column);
         MoveCursorAndScroll(CURSOR_DOWN);
         MoveCursorAndScroll(HOME);
     }
 
+    // Printable
+    else {
+        editor.buffer_modified = 1;
+        String* cur_line = array_buffer->array[editor.cur_line];
+        StringInsertChar(cur_line, editor.cur_column, c);
+        MoveCursorAndScroll(CURSOR_RIGHT);
+    }
+}
+
+void Yank() {
+    StringClear(editor.yanked);
+    size_t st_l = editor.v_start_line, st_c = editor.v_start_col;
+    size_t en_l = editor.cur_line, en_c = editor.cur_column;
+
+    if (en_l < st_l) {
+        swap(&st_l, &en_l);
+        swap(&st_c, &en_c);
+    } else if (en_l == st_l && en_c < st_c) {
+        swap(&st_c, &en_c);
+    }
+
+    for (size_t line = st_l; line <= en_l; line++) {
+        String* cur_line = array_buffer->array[line];
+        if (line == st_l && line == en_l) {
+            for (size_t c = st_c; c < en_c; c++) {
+                StringInsertChar(editor.yanked, editor.yanked->size, cur_line->str[c]);
+            }
+        } else if (line == st_l) {
+            StringAppend(editor.yanked, &cur_line->str[st_c]);
+        } else if (line == en_l) {
+            for (size_t c = 0; c < en_c; c++) {
+                StringInsertChar(editor.yanked, editor.yanked->size, cur_line->str[c]);
+            }
+        } else {
+            StringAppend(editor.yanked, cur_line->str);
+        }
+        if (line < en_l) {
+            StringInsertChar(editor.yanked, editor.yanked->size, '\n');
+        }
+    }
+}
+
+void Paste() {
+    for (int i = 0; i < editor.yanked->size; i++) {
+        if (editor.yanked->str[i] == '\n') {
+            BufferInsert('\r');
+        } else {
+            BufferInsert(editor.yanked->str[i]);
+        }
+    }
+}
+
+// Key proccessing for differnet modes
+void InsertProccessKey(int key) {
     // Backspace -> Delete backward
     if (key == 127) {
         String* cur_line = array_buffer->array[editor.cur_line];
@@ -1004,12 +1143,9 @@ void InsertProccessKey(int key) {
         MoveCursorAndScroll(key);
     }
     
-    // Printable
-    if (IsPrintableCharacter(key)) {
-        editor.buffer_modified = 1;
-        String* cur_line = array_buffer->array[editor.cur_line];
-        StringInsertChar(cur_line, editor.cur_column, key);
-        MoveCursorAndScroll(CURSOR_RIGHT);
+    // Insertable
+    if (IsPrintableCharacter(key) || key == '\r') {
+        BufferInsert(key);
     }
 }
 
@@ -1030,6 +1166,10 @@ void NormalProccessKey(int key) {
     if (IsMotion(key)) {
         Motion(key);
     }
+
+    if (key == 'p') {
+        Paste();
+    }
     
     // switch between modes
     switch (key)
@@ -1039,7 +1179,7 @@ void NormalProccessKey(int key) {
         editor.mode = INSERT;
         break;
     case 'v':
-        editor.mode = VISUAL;
+        VisualModeOn();
         break;
     case ':':
         editor.mode = COMMAND_LINE;
@@ -1052,23 +1192,15 @@ void NormalProccessKey(int key) {
 }
 
 void CommandProccessKey(int key) {
-    switch (key) // Moving keys
-    {
-    case CURSOR_RIGHT:
-        if (editor.command_cursor_pos < (int)editor.command->size) {
-            editor.command_cursor_pos++;
-        }
-        break;
-    case CURSOR_LEFT:       
-        if (editor.command_cursor_pos > 0) {
-            editor.command_cursor_pos--;
-        }
-        break;
-    default:
-        break;
+    if (key == CURSOR_RIGHT && editor.command_cursor_pos < (int)editor.command->size) { // Moving keys
+        editor.command_cursor_pos++;
+    } 
+
+    else if (key == CURSOR_LEFT && editor.command_cursor_pos > 0) {
+        editor.command_cursor_pos--;
     }
 
-    if (key == '\r') {
+    else if (key == '\r') {
         NormalModeOn();
         ExecuteCommand();
     }
@@ -1094,7 +1226,29 @@ void CommandProccessKey(int key) {
 }
 
 void VisualProccessKey(int key) {
+    if (IsMoveKeyNormal(key)) {
+        editor.motion_count = max(1, editor.motion_count);
+        for (int i = 0; i < editor.motion_count; i++) {
+            MoveCursorAndScroll(key);
+        }
+        editor.motion_count = 0;
+    }
 
+    else if (IsMotion(key)) {
+        Motion(key);
+    }
+
+    else if (isdigit(key)) {
+        UpdateMotionCount(key - '0');
+    }
+
+    else if (key == 'y') {
+        Yank();
+    } 
+    
+    else if (key == 'd') {
+        // Paste();
+    }
 }
 void EditorProccessKey() {
     int key = EditorReadKey();
